@@ -3,7 +3,7 @@ import {
   createHmac,
   timingSafeEqual,
 } from "node:crypto";
-import { serverEnv } from "@/lib/env";
+import { supabaseServerEnv } from "@/lib/env";
 
 const COOKIE_VERSION = "v1";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -21,7 +21,7 @@ function signingKey() {
     cachedSigningKey = createHash("sha256")
       .update(SIGNING_CONTEXT, "utf8")
       .update("\0", "utf8")
-      .update(serverEnv().SUPABASE_SECRET_KEY, "utf8")
+      .update(supabaseServerEnv().SUPABASE_SECRET_KEY, "utf8")
       .digest();
   }
 

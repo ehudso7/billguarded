@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { serverEnv } from "@/lib/env";
+import { supabaseServerEnv } from "@/lib/env";
 
 export function supabaseAdmin() {
-  const env = serverEnv();
+  const env = supabaseServerEnv();
 
   return createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
     auth: {

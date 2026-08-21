@@ -1,4 +1,4 @@
-import { serverEnv } from "@/lib/env";
+import { stripeServerEnv } from "@/lib/env";
 import { OFFERS, offerFromPriceId, type OfferId } from "@/lib/offers";
 
 function isLiveStripeKey(key: string) {
@@ -6,7 +6,7 @@ function isLiveStripeKey(key: string) {
 }
 
 function configuredPrice(offerId: OfferId) {
-  const env = serverEnv();
+  const env = stripeServerEnv();
   const offer = OFFERS[offerId];
   const configured = env[offer.priceEnv];
 
