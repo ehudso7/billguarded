@@ -24,6 +24,7 @@ Stripe Checkout is hosted by Stripe. Payment state is synchronized through a sig
 - Vercel project ID: `prj_uFLTZhEoI8rkgGtYPKn3K5wRrzuI`
 - Supabase project: `rduryyyprvwqzopsvzvr` (`reqovr-db`)
 - Stripe sandbox account: `acct_1U6prVBOw52KUyWD` (`Reqovr sandbox`)
+- Vercel Stripe resource: `stripe-reqovr-sandbox` connected to `reqovr`
 - Production alias: `reqovr.vercel.app`
 
 The initial Vercel production deployment was created from the bootstrap `main` commit before the Next.js application existed. Feature-branch preview deployments are used to validate the real application before merging to `main`.
