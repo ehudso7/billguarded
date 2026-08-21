@@ -17,6 +17,15 @@ Stripe Checkout is hosted by Stripe. Payment state is synchronized through a sig
 - Vercel
 - GitHub Actions
 
+## Deployment binding
+
+- GitHub: `ehudso7/reqovr`
+- Vercel project: `everton-hudsons-projects/reqovr`
+- Vercel project ID: `prj_uFLTZhEoI8rkgGtYPKn3K5wRrzuI`
+- Production alias: `reqovr.vercel.app`
+
+The initial Vercel production deployment was created from the bootstrap `main` commit before the Next.js application existed. Feature-branch preview deployments are used to validate the real application before merging to `main`.
+
 ## Local setup
 
 1. Copy `.env.example` to `.env.local`.
@@ -31,7 +40,7 @@ Stripe Checkout is hosted by Stripe. Payment state is synchronized through a sig
    - `customer.subscription.deleted`
    - `invoice.paid`
    - `invoice.payment_failed`
-6. Run `npm install`, then `npm run dev`.
+6. Run `npm ci`, then `npm run dev`.
 
 ## Required environment variables
 
