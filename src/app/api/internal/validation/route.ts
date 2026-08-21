@@ -16,6 +16,7 @@ export const maxDuration = 60;
 
 const CONTENT_TYPE = "application/pdf";
 const VALIDATION_EMAIL = "reqovr-validation@example.com";
+const REQOVR_STRIPE_ACCOUNT = "acct_1U6prVBOw52KUyWD";
 
 function isSandboxKey(key: string) {
   return key.startsWith("sk_test_") || key.startsWith("rk_test_");
@@ -264,8 +265,8 @@ export async function GET(request: NextRequest) {
       throw new Error("sandbox_stripe_key_required");
     }
 
-    const account = await stripe().accounts.retrieve();
-    if (account.id !== "acct_1U6prVBOw52KUyWD") {
+    const account = await stripe().accounts.retrieve(REQOVR_STRIPE_ACCOUNT);
+    if (account.id !== REQOVR_STRIPE_ACCOUNT) {
       throw new Error("unexpected_stripe_account");
     }
 
