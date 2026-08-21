@@ -25,6 +25,7 @@ Stripe Checkout is hosted by Stripe. Payment state is synchronized through a sig
 4. Configure the Stripe webhook endpoint as `/api/stripe/webhook`.
 5. Subscribe the webhook to:
    - `checkout.session.completed`
+   - `checkout.session.async_payment_succeeded`
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
@@ -40,6 +41,8 @@ For Supabase, use a modern `sb_publishable_...` key in browser-safe configuratio
 
 ## Security model
 
-The first validation build intentionally avoids a full application account system. Intake and document operations are server-authorized, uploads use short-lived signed upload URLs, and Customer Portal access is granted only to the browser that successfully completed Checkout via an HMAC-signed HttpOnly cookie.
+The first validation build intentionally avoids a full application account system. Intake and document operations are server-authorized, uploads use short-lived signed upload URLs, document slots are enforced in Postgres, and uploaded files must be verified in the private bucket before they can satisfy the Checkout gate. Customer Portal access is granted only to the browser that successfully completed Checkout via an HMAC-signed HttpOnly cookie.
 
-Before broad production launch, add durable user authentication and organization-level authorization.
+Delayed Stripe payment methods are not provisioned on `checkout.session.completed` until Stripe reports the Checkout Session paid; `checkout.session.async_payment_succeeded` completes provisioning when applicable.
+
+Before broad production launch, add durable user authentication, organization-level authorization, and edge rate limiting / bot protection for public intake routes.

@@ -36,14 +36,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const { count: documentCount, error: documentError } = await supabase
+  const { data: documents, error: documentError } = await supabase
     .from("audit_documents")
-    .select("id", { count: "exact", head: true })
-    .eq("audit_request_id", audit.id);
+    .select("kind")
+    .eq("audit_request_id", audit.id)
+    .eq("upload_status", "uploaded");
 
-  if (documentError || !documentCount || documentCount < 2) {
+  const hasTerms = documents?.some(
+    (document) => document.kind === "contract" || document.kind === "rate_card",
+  );
+  const hasInvoice = documents?.some((document) => document.kind === "invoice");
+
+  if (documentError || !hasTerms || !hasInvoice) {
     return NextResponse.json(
-      { error: "Upload the contract and at least one invoice first." },
+      { error: "Upload and verify the contract or rate card plus at least one invoice first." },
       { status: 409 },
     );
   }

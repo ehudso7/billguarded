@@ -53,7 +53,7 @@ export const OFFERS: Record<OfferId, Offer> = {
   },
 };
 
-export function isOfferId(value: string): value is OfferId {
+export function isOfferId(value: unknown): value is OfferId {
   return value === "audit_90_day" || value === "continuous_monitor";
 }
 

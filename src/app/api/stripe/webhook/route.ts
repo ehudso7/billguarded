@@ -1,7 +1,11 @@
 import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env";
-import { offerFromPriceId, type OfferId } from "@/lib/offers";
+import {
+  isOfferId,
+  offerFromPriceId,
+  type OfferId,
+} from "@/lib/offers";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -57,14 +61,17 @@ async function recordEventError(eventId: string, error: unknown) {
 }
 
 function stripeId(
-  value:
-    | string
-    | { id: string }
-    | null
-    | undefined,
+  value: string | { id: string } | null | undefined,
 ) {
   if (!value) return null;
   return typeof value === "string" ? value : value.id;
+}
+
+function checkoutIsPaid(session: Stripe.Checkout.Session) {
+  return (
+    session.payment_status === "paid" ||
+    session.payment_status === "no_payment_required"
+  );
 }
 
 function firstPriceId(subscription: Stripe.Subscription) {
@@ -125,10 +132,7 @@ async function upsertEntitlement(input: {
 async function offerForSubscription(subscription: Stripe.Subscription) {
   const env = serverEnv();
   const metadataOffer = subscription.metadata.offer;
-  if (
-    metadataOffer === "audit_90_day" ||
-    metadataOffer === "continuous_monitor"
-  ) {
+  if (isOfferId(metadataOffer)) {
     return metadataOffer;
   }
 
@@ -162,11 +166,19 @@ async function subscriptionIdFromInvoice(invoice: Stripe.Invoice) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  if (!checkoutIsPaid(session)) return;
+
   const customerId = stripeId(session.customer);
   const requestId = session.metadata?.request_id;
-  const offer = session.metadata?.offer as OfferId | undefined;
-  if (!customerId || !requestId || !offer) {
-    throw new Error("checkout_missing_required_metadata");
+  const metadataOffer = session.metadata?.offer;
+
+  if (!requestId || !isOfferId(metadataOffer)) {
+    console.warn("stripe_checkout_not_reqovr", session.id);
+    return;
+  }
+
+  if (!customerId) {
+    throw new Error("checkout_customer_missing");
   }
 
   await upsertCustomer(
@@ -191,7 +203,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   await upsertEntitlement({
     customerId,
-    offer,
+    offer: metadataOffer,
     status: entitlementStatus,
     checkoutSessionId: session.id,
     subscriptionId,
@@ -204,7 +216,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       status: "paid",
       stripe_customer_id: customerId,
       stripe_checkout_session_id: session.id,
-      selected_offer: offer,
+      selected_offer: metadataOffer,
       paid_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -273,6 +285,7 @@ export async function POST(request: Request) {
   try {
     switch (event.type) {
       case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded":
         await handleCheckoutCompleted(
           event.data.object as Stripe.Checkout.Session,
         );

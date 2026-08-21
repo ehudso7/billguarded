@@ -19,13 +19,9 @@ export async function GET(request: NextRequest) {
   }
 
   const session = await stripe().checkout.sessions.retrieve(sessionId);
-  const paid =
-    session.payment_status === "paid" ||
-    session.payment_status === "no_payment_required";
-
-  if (session.status !== "complete" || !paid) {
+  if (session.status !== "complete") {
     return NextResponse.redirect(
-      new URL("/start?error=payment_not_complete", request.url),
+      new URL("/start?error=checkout_not_complete", request.url),
     );
   }
 
@@ -36,6 +32,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const paid =
+    session.payment_status === "paid" ||
+    session.payment_status === "no_payment_required";
   const cookie = createPortalCookie(customerId);
   const target = new URL("/success", request.url);
   const requestId = session.metadata?.request_id;
@@ -43,6 +42,7 @@ export async function GET(request: NextRequest) {
 
   if (requestId) target.searchParams.set("request", requestId);
   if (offer) target.searchParams.set("offer", offer);
+  if (!paid) target.searchParams.set("pending", "1");
 
   const response = NextResponse.redirect(target);
   response.cookies.set(portalCookieName, cookie.value, {

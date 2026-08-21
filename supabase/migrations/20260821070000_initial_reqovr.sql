@@ -2,6 +2,9 @@ begin;
 
 create extension if not exists pgcrypto;
 
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
 create table if not exists public.audit_requests (
   id uuid primary key default gen_random_uuid(),
   company text not null check (char_length(company) between 2 and 120),
@@ -33,11 +36,69 @@ create table if not exists public.audit_documents (
   storage_path text not null unique,
   content_type text not null,
   byte_size bigint not null check (byte_size > 0 and byte_size <= 20971520),
+  upload_status text not null default 'pending'
+    check (upload_status in ('pending', 'uploaded')),
+  uploaded_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 create index if not exists audit_documents_request_idx
   on public.audit_documents (audit_request_id, created_at);
+
+create index if not exists audit_documents_request_status_idx
+  on public.audit_documents (audit_request_id, upload_status, kind);
+
+create or replace function private.enforce_audit_document_limits()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  invoice_total integer;
+  terms_total integer;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(new.audit_request_id::text, 0)
+  );
+
+  if new.kind = 'invoice' then
+    select count(*)
+      into invoice_total
+      from public.audit_documents
+     where audit_request_id = new.audit_request_id
+       and kind = 'invoice';
+
+    if invoice_total >= 10 then
+      raise exception using
+        errcode = '23514',
+        message = 'invoice document limit reached';
+    end if;
+  else
+    select count(*)
+      into terms_total
+      from public.audit_documents
+     where audit_request_id = new.audit_request_id
+       and kind in ('contract', 'rate_card');
+
+    if terms_total >= 1 then
+      raise exception using
+        errcode = '23514',
+        message = 'terms document limit reached';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function private.enforce_audit_document_limits() from public, anon, authenticated;
+
+drop trigger if exists audit_document_limits_before_insert
+  on public.audit_documents;
+
+create trigger audit_document_limits_before_insert
+before insert on public.audit_documents
+for each row execute function private.enforce_audit_document_limits();
 
 create table if not exists public.billing_customers (
   id uuid primary key default gen_random_uuid(),
