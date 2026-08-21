@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -35,6 +35,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          NEXT_TELEMETRY_DISABLED: "1"
           APP_URL: https://example.com
           STRIPE_SECRET_KEY: sk_test_placeholder_for_build_only
           STRIPE_WEBHOOK_SECRET: whsec_placeholder_for_build_only
