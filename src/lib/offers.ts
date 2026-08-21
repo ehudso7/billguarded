@@ -12,6 +12,7 @@ export type Offer = {
   priceEnv:
     | "STRIPE_PRICE_AUDIT_90_DAY"
     | "STRIPE_PRICE_CONTINUOUS_MONITOR";
+  sandboxPriceId: string;
 };
 
 export const OFFERS: Record<OfferId, Offer> = {
@@ -32,6 +33,7 @@ export const OFFERS: Record<OfferId, Offer> = {
     ],
     mode: "payment",
     priceEnv: "STRIPE_PRICE_AUDIT_90_DAY",
+    sandboxPriceId: "price_1U6puoBOw52KUyWD3Rcakbks",
   },
   continuous_monitor: {
     id: "continuous_monitor",
@@ -50,6 +52,7 @@ export const OFFERS: Record<OfferId, Offer> = {
     ],
     mode: "subscription",
     priceEnv: "STRIPE_PRICE_CONTINUOUS_MONITOR",
+    sandboxPriceId: "price_1U6pvABOw52KUyWDYj1TH9wv",
   },
 };
 

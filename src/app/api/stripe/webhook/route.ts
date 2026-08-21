@@ -1,12 +1,12 @@
 import type Stripe from "stripe";
 import { NextResponse } from "next/server";
-import { serverEnv } from "@/lib/env";
 import {
   isOfferId,
-  offerFromPriceId,
   type OfferId,
 } from "@/lib/offers";
+import { offerForStripePriceId } from "@/lib/stripe-prices";
 import { stripe } from "@/lib/stripe";
+import { stripeWebhookSecret } from "@/lib/stripe-webhook-secret";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -130,17 +130,12 @@ async function upsertEntitlement(input: {
 }
 
 async function offerForSubscription(subscription: Stripe.Subscription) {
-  const env = serverEnv();
   const metadataOffer = subscription.metadata.offer;
   if (isOfferId(metadataOffer)) {
     return metadataOffer;
   }
 
-  return offerFromPriceId(
-    firstPriceId(subscription),
-    env.STRIPE_PRICE_AUDIT_90_DAY,
-    env.STRIPE_PRICE_CONTINUOUS_MONITOR,
-  );
+  return offerForStripePriceId(firstPriceId(subscription));
 }
 
 async function syncSubscription(subscription: Stripe.Subscription) {
@@ -250,17 +245,20 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
 }
 
 export async function POST(request: Request) {
-  const env = serverEnv();
-  if (!env.STRIPE_WEBHOOK_SECRET) {
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) {
+    return NextResponse.json({ error: "missing_signature" }, { status: 400 });
+  }
+
+  let webhookSecret: string;
+  try {
+    webhookSecret = await stripeWebhookSecret();
+  } catch {
+    console.error("stripe_webhook_secret_unavailable");
     return NextResponse.json(
       { error: "webhook_not_configured" },
       { status: 503 },
     );
-  }
-
-  const signature = request.headers.get("stripe-signature");
-  if (!signature) {
-    return NextResponse.json({ error: "missing_signature" }, { status: 400 });
   }
 
   const body = await request.text();
@@ -270,7 +268,7 @@ export async function POST(request: Request) {
     event = stripe().webhooks.constructEvent(
       body,
       signature,
-      env.STRIPE_WEBHOOK_SECRET,
+      webhookSecret,
     );
   } catch {
     return NextResponse.json({ error: "invalid_signature" }, { status: 400 });

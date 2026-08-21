@@ -1,13 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { serverEnv } from "@/lib/env";
 import { stripe } from "@/lib/stripe";
 import {
   portalCookieName,
   verifyPortalCookie,
 } from "@/lib/security/portal-cookie";
 
-export async function POST() {
+export async function POST(request: Request) {
   const cookieStore = await cookies();
   const payload = verifyPortalCookie(
     cookieStore.get(portalCookieName)?.value,
@@ -22,7 +21,7 @@ export async function POST() {
 
   const session = await stripe().billingPortal.sessions.create({
     customer: payload.customerId,
-    return_url: `${serverEnv().APP_URL}/success`,
+    return_url: `${new URL(request.url).origin}/success`,
   });
 
   return NextResponse.redirect(session.url, 303);

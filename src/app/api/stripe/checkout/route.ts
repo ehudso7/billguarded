@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkoutSchema } from "@/lib/validation";
 import { OFFERS } from "@/lib/offers";
-import { serverEnv } from "@/lib/env";
+import { stripePriceId } from "@/lib/stripe-prices";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -19,7 +19,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const env = serverEnv();
   const offer = OFFERS[parsed.data.offer];
   const supabase = supabaseAdmin();
 
@@ -54,7 +53,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const priceId = env[offer.priceEnv];
+  const priceId = stripePriceId(offer.id);
+  const origin = new URL(request.url).origin;
   const metadata = {
     request_id: audit.id,
     offer: offer.id,
@@ -64,8 +64,8 @@ export async function POST(request: Request) {
   const common = {
     customer_email: audit.email,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${env.APP_URL}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${env.APP_URL}/start?offer=${offer.id}&cancelled=1`,
+    success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/start?offer=${offer.id}&cancelled=1`,
     metadata,
     integration_identifier: INTEGRATION_IDENTIFIER,
   };
