@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     cancel_url: `${env.APP_URL}/start?offer=${offer.id}&cancelled=1`,
     metadata,
     integration_identifier: INTEGRATION_IDENTIFIER,
-  } as const;
+  };
 
   const session =
     offer.mode === "subscription"
