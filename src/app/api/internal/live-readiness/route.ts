@@ -15,12 +15,11 @@ function bearerToken(request: Request) {
   return header.slice("Bearer ".length).trim();
 }
 
-export async function POST(request: Request) {
+async function runReadinessProbe(token: string | null) {
   if (process.env.VERCEL_ENV !== "production") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const token = bearerToken(request);
   if (!token || token.length < 32) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -87,4 +86,13 @@ export async function POST(request: Request) {
       interval_count: monitorPrice.recurring?.interval_count ?? null,
     },
   });
+}
+
+export async function POST(request: Request) {
+  return runReadinessProbe(bearerToken(request));
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  return runReadinessProbe(url.searchParams.get("token"));
 }
