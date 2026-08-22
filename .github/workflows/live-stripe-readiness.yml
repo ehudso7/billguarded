@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 6
 
     steps:
+      # Retry after Supabase PostgREST schema cache reload.
       - name: Wait for production and run zero-write readiness probe
         shell: bash
         run: |
