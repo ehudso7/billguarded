@@ -29,11 +29,11 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
         <h1>
           {pending
             ? "Stripe is still finalizing your payment."
-            : "Your Reqovr workspace is funded."}
+            : "Your BillGuarded workspace is funded."}
         </h1>
         <p className="muted">
           {pending
-            ? "Reqovr will not provision paid access until Stripe reports the payment successful. No refund or recovery outcome is assumed while payment is pending."
+            ? "BillGuarded will not provision paid access until Stripe reports the payment successful. No refund or recovery outcome is assumed while payment is pending."
             : "Stripe confirmed the checkout. The signed webhook is the source of truth for provisioning the audit entitlement and updating the audit request."}
         </p>
         <div className="hero-actions">

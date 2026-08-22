@@ -11,7 +11,7 @@ export default function HomePage() {
         <nav className="nav">
           <Link className="brand" href="/">
             <span className="brand-mark" aria-hidden="true" />
-            Reqovr
+            BillGuarded
           </Link>
           <Link className="nav-pill" href="/start">
             Run an audit
@@ -22,9 +22,9 @@ export default function HomePage() {
           <span className="eyebrow">3PL invoice intelligence</span>
           <h1>Find the charges your warehouse should not have billed.</h1>
           <p>
-            Reqovr reconciles fulfillment invoices against your contract and
-            rate card, surfaces evidence-backed discrepancies, and gives your
-            team a clean record to review before disputing anything.
+            BillGuarded reconciles fulfillment invoices against your contract
+            and rate card, surfaces evidence-backed discrepancies, and gives
+            your team a clean record to review before disputing anything.
           </p>
           <div className="hero-actions">
             <Link className="button primary" href="/start">
@@ -36,7 +36,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="proof-strip" aria-label="How Reqovr works">
+        <section className="proof-strip" aria-label="How BillGuarded works">
           <div className="proof-item">
             <strong>1. Upload</strong>
             <span>Your contract or rate card plus recent 3PL invoices.</span>
@@ -93,9 +93,9 @@ export default function HomePage() {
         </section>
 
         <footer className="footer">
-          Reqovr identifies potential billing discrepancies from the documents
-          supplied. Findings require review and do not guarantee refunds,
-          credits, or recoveries.
+          BillGuarded identifies potential billing discrepancies from the
+          documents supplied. Findings require review and do not guarantee
+          refunds, credits, or recoveries.
         </footer>
       </div>
     </main>

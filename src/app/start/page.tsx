@@ -9,7 +9,7 @@ export default function StartPage() {
         <nav className="nav">
           <Link className="brand" href="/">
             <span className="brand-mark" aria-hidden="true" />
-            Reqovr
+            BillGuarded
           </Link>
           <Link className="nav-pill" href="/">
             Back

@@ -8,7 +8,7 @@ export function stripe() {
     stripeClient = new Stripe(stripeServerEnv().STRIPE_SECRET_KEY, {
       apiVersion: "2026-07-29.dahlia",
       appInfo: {
-        name: "Reqovr",
+        name: "BillGuarded",
         version: "0.1.0",
       },
     });

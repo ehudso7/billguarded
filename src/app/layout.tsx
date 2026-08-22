@@ -13,7 +13,7 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reqovr — Find the charges your 3PL should not have billed",
+  title: "BillGuarded — Find the charges your 3PL should not have billed",
   description:
     "Evidence-backed 3PL invoice reconciliation for ecommerce operators.",
 };
