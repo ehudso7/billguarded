@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 const EXPECTED_ACCOUNT = "acct_1U6prLB5mhEA8v5j";
 const EXPECTED_AUDIT_PRICE = "price_1U76TJB5mhEA8v5jnP70HVCd";
 const EXPECTED_MONITOR_PRICE = "price_1U76TRB5mhEA8v5jApmvnbDj";
+const ALLOWED_HOSTS = new Set(["billguarded.com", "www.billguarded.com"]);
 
 function bearerToken(request: Request) {
   const header = request.headers.get("authorization");
@@ -15,8 +16,14 @@ function bearerToken(request: Request) {
   return header.slice("Bearer ".length).trim();
 }
 
-async function runReadinessProbe(token: string | null) {
-  if (process.env.VERCEL_ENV !== "production") {
+function requestHost(request: Request) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (forwardedHost) return forwardedHost.toLowerCase();
+  return new URL(request.url).hostname.toLowerCase();
+}
+
+async function runReadinessProbe(request: Request, token: string | null) {
+  if (!ALLOWED_HOSTS.has(requestHost(request))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -89,10 +96,10 @@ async function runReadinessProbe(token: string | null) {
 }
 
 export async function POST(request: Request) {
-  return runReadinessProbe(bearerToken(request));
+  return runReadinessProbe(request, bearerToken(request));
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  return runReadinessProbe(url.searchParams.get("token"));
+  return runReadinessProbe(request, url.searchParams.get("token"));
 }
