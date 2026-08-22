@@ -17,16 +17,22 @@ async function recordResult(input: {
   monitorPriceOk: boolean;
   errorCode?: string | null;
 }) {
-  await supabaseAdmin().rpc("record_live_readiness_result", {
-    p_ok: input.ok,
-    p_account_id_match: input.accountIdMatch,
-    p_charges_enabled: input.chargesEnabled,
-    p_payouts_enabled: input.payoutsEnabled,
-    p_audit_price_ok: input.auditPriceOk,
-    p_monitor_price_ok: input.monitorPriceOk,
-    p_writes_performed: 0,
-    p_error_code: input.errorCode ?? null,
-  });
+  const { error } = await supabaseAdmin()
+    .from("_internal_live_readiness_results")
+    .insert({
+      ok: input.ok,
+      account_id_match: input.accountIdMatch,
+      charges_enabled: input.chargesEnabled,
+      payouts_enabled: input.payoutsEnabled,
+      audit_price_ok: input.auditPriceOk,
+      monitor_price_ok: input.monitorPriceOk,
+      writes_performed: 0,
+      error_code: input.errorCode ?? null,
+    });
+
+  if (error) {
+    throw new Error(`readiness_result_record_failed:${error.code}`);
+  }
 }
 
 export async function GET() {
@@ -99,7 +105,7 @@ export async function GET() {
       payoutsEnabled: false,
       auditPriceOk: false,
       monitorPriceOk: false,
-      errorCode: "stripe_readiness_exception",
+      errorCode: "stripe_or_result_write_exception",
     }).catch(() => undefined);
 
     return NextResponse.json({ error: "readiness_check_failed" }, { status: 500 });
