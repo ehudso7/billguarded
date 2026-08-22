@@ -8,6 +8,27 @@ const LIVE_ACCOUNT_ID = "acct_1U6prLB5mhEA8v5j";
 const AUDIT_PRICE_ID = "price_1U76TJB5mhEA8v5jnP70HVCd";
 const MONITOR_PRICE_ID = "price_1U76TRB5mhEA8v5jApmvnbDj";
 
+async function recordResult(input: {
+  ok: boolean;
+  accountIdMatch: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  auditPriceOk: boolean;
+  monitorPriceOk: boolean;
+  errorCode?: string | null;
+}) {
+  await supabaseAdmin().rpc("record_live_readiness_result", {
+    p_ok: input.ok,
+    p_account_id_match: input.accountIdMatch,
+    p_charges_enabled: input.chargesEnabled,
+    p_payouts_enabled: input.payoutsEnabled,
+    p_audit_price_ok: input.auditPriceOk,
+    p_monitor_price_ok: input.monitorPriceOk,
+    p_writes_performed: 0,
+    p_error_code: input.errorCode ?? null,
+  });
+}
+
 export async function GET() {
   if (process.env.VERCEL_ENV !== "production") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -42,17 +63,27 @@ export async function GET() {
       monitorPrice.unit_amount === 59900 &&
       monitorPrice.recurring?.interval === "month";
 
-    const accountOk =
-      account.id === LIVE_ACCOUNT_ID &&
-      account.charges_enabled === true &&
-      account.payouts_enabled === true;
+    const accountIdMatch = account.id === LIVE_ACCOUNT_ID;
+    const chargesEnabled = account.charges_enabled === true;
+    const payoutsEnabled = account.payouts_enabled === true;
+    const accountOk = accountIdMatch && chargesEnabled && payoutsEnabled;
+    const ok = accountOk && auditOk && monitorOk;
+
+    await recordResult({
+      ok,
+      accountIdMatch,
+      chargesEnabled,
+      payoutsEnabled,
+      auditPriceOk: auditOk,
+      monitorPriceOk: monitorOk,
+    });
 
     return NextResponse.json({
-      ok: accountOk && auditOk && monitorOk,
+      ok,
       account: {
-        id_match: account.id === LIVE_ACCOUNT_ID,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
+        id_match: accountIdMatch,
+        charges_enabled: chargesEnabled,
+        payouts_enabled: payoutsEnabled,
       },
       prices: {
         audit_live_active_1500: auditOk,
@@ -61,6 +92,16 @@ export async function GET() {
       writes_performed: 0,
     });
   } catch {
+    await recordResult({
+      ok: false,
+      accountIdMatch: false,
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      auditPriceOk: false,
+      monitorPriceOk: false,
+      errorCode: "stripe_readiness_exception",
+    }).catch(() => undefined);
+
     return NextResponse.json({ error: "readiness_check_failed" }, { status: 500 });
   }
 }
