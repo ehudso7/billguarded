@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -8,23 +8,17 @@ const LIVE_ACCOUNT_ID = "acct_1U6prLB5mhEA8v5j";
 const AUDIT_PRICE_ID = "price_1U76TJB5mhEA8v5jnP70HVCd";
 const MONITOR_PRICE_ID = "price_1U76TRB5mhEA8v5jApmvnbDj";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   if (process.env.VERCEL_ENV !== "production") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const token = request.nextUrl.searchParams.get("token");
-  if (!token) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
   const { data: authorized, error: authorizationError } = await supabaseAdmin().rpc(
-    "consume_live_readiness_token",
-    { p_token: token },
+    "consume_live_readiness_slot",
   );
 
   if (authorizationError || authorized !== true) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "already_used_or_expired" }, { status: 410 });
   }
 
   try {
