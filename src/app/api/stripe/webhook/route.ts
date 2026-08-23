@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { processAuditRequest } from "@/lib/audit-engine";
 import {
   isOfferId,
   type OfferId,
@@ -10,6 +11,7 @@ import { stripeWebhookSecret } from "@/lib/stripe-webhook-secret";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 async function eventAlreadyProcessed(eventId: string) {
   const supabase = supabaseAdmin();
@@ -161,15 +163,15 @@ async function subscriptionIdFromInvoice(invoice: Stripe.Invoice) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  if (!checkoutIsPaid(session)) return;
+  if (!checkoutIsPaid(session)) return null;
 
   const customerId = stripeId(session.customer);
   const requestId = session.metadata?.request_id;
   const metadataOffer = session.metadata?.offer;
 
   if (!requestId || !isOfferId(metadataOffer)) {
-    console.warn("stripe_checkout_not_reqovr", session.id);
-    return;
+    console.warn("stripe_checkout_not_billguarded", session.id);
+    return null;
   }
 
   if (!customerId) {
@@ -218,6 +220,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     .eq("id", requestId);
 
   if (error) throw error;
+  return requestId;
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -241,6 +244,16 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
     status: "past_due",
     subscriptionId,
     currentPeriodEnd: periodEnd(subscription),
+  });
+}
+
+function scheduleAudit(requestId: string) {
+  after(async () => {
+    try {
+      await processAuditRequest(requestId);
+    } catch (error) {
+      console.error("billguarded_audit_processing_failed", requestId, error);
+    }
   });
 }
 
@@ -283,11 +296,13 @@ export async function POST(request: Request) {
   try {
     switch (event.type) {
       case "checkout.session.completed":
-      case "checkout.session.async_payment_succeeded":
-        await handleCheckoutCompleted(
+      case "checkout.session.async_payment_succeeded": {
+        const requestId = await handleCheckoutCompleted(
           event.data.object as Stripe.Checkout.Session,
         );
+        if (requestId) scheduleAudit(requestId);
         break;
+      }
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
