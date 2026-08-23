@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { processAuditRequest } from "@/lib/audit-engine";
+import { isOfferId } from "@/lib/offers";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
@@ -18,6 +19,79 @@ function customerIdFromSession(
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function promotePaidSandboxCheckout(input: {
+  requestId: string;
+  customerId: string;
+  sessionId: string;
+  offer: string | undefined;
+  email: string | null;
+  name: string | null;
+}) {
+  if (!isOfferId(input.offer)) {
+    throw new Error("sandbox_checkout_offer_missing");
+  }
+
+  const supabase = supabaseAdmin();
+  const now = new Date().toISOString();
+
+  const { data: audit, error: auditError } = await supabase
+    .from("audit_requests")
+    .select("id,status,stripe_checkout_session_id")
+    .eq("id", input.requestId)
+    .maybeSingle();
+
+  if (auditError) throw auditError;
+  if (!audit) throw new Error("sandbox_checkout_request_missing");
+  if (
+    audit.stripe_checkout_session_id &&
+    audit.stripe_checkout_session_id !== input.sessionId
+  ) {
+    throw new Error("sandbox_checkout_session_mismatch");
+  }
+
+  const { error: customerError } = await supabase
+    .from("billing_customers")
+    .upsert(
+      {
+        stripe_customer_id: input.customerId,
+        email: input.email,
+        name: input.name,
+        updated_at: now,
+      },
+      { onConflict: "stripe_customer_id" },
+    );
+  if (customerError) throw customerError;
+
+  const { error: entitlementError } = await supabase
+    .from("billing_entitlements")
+    .upsert(
+      {
+        stripe_customer_id: input.customerId,
+        offer: input.offer,
+        status: "active",
+        stripe_checkout_session_id: input.sessionId,
+        updated_at: now,
+      },
+      { onConflict: "stripe_customer_id,offer" },
+    );
+  if (entitlementError) throw entitlementError;
+
+  if (audit.status === "checkout_started" || audit.status === "intake") {
+    const { error: requestError } = await supabase
+      .from("audit_requests")
+      .update({
+        status: "paid",
+        stripe_customer_id: input.customerId,
+        stripe_checkout_session_id: input.sessionId,
+        selected_offer: input.offer,
+        paid_at: now,
+        updated_at: now,
+      })
+      .eq("id", input.requestId);
+    if (requestError) throw requestError;
+  }
 }
 
 async function startPaidAudit(requestId: string) {
@@ -77,6 +151,17 @@ export async function GET(request: NextRequest) {
   if (!paid) target.searchParams.set("pending", "1");
 
   if (paid && requestId) {
+    if (!session.livemode) {
+      await promotePaidSandboxCheckout({
+        requestId,
+        customerId,
+        sessionId: session.id,
+        offer,
+        email: session.customer_details?.email ?? session.customer_email ?? null,
+        name: session.customer_details?.name ?? null,
+      });
+    }
+
     after(() => startPaidAudit(requestId));
   }
 
