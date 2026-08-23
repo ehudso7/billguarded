@@ -7,6 +7,16 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
 
+function isCsvDocument(document: {
+  content_type: string;
+  original_filename: string;
+}) {
+  return (
+    document.content_type === "text/csv" ||
+    document.original_filename.toLowerCase().endsWith(".csv")
+  );
+}
+
 export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(
     await request.json().catch(() => null),
@@ -37,18 +47,24 @@ export async function POST(request: Request) {
 
   const { data: documents, error: documentError } = await supabase
     .from("audit_documents")
-    .select("kind")
+    .select("kind,content_type,original_filename")
     .eq("audit_request_id", audit.id)
     .eq("upload_status", "uploaded");
 
-  const hasTerms = documents?.some(
+  const csvDocuments = documents?.filter(isCsvDocument) ?? [];
+  const hasCsvTerms = csvDocuments.some(
     (document) => document.kind === "contract" || document.kind === "rate_card",
   );
-  const hasInvoice = documents?.some((document) => document.kind === "invoice");
+  const hasCsvInvoice = csvDocuments.some(
+    (document) => document.kind === "invoice",
+  );
 
-  if (documentError || !hasTerms || !hasInvoice) {
+  if (documentError || !hasCsvTerms || !hasCsvInvoice) {
     return NextResponse.json(
-      { error: "Upload and verify the contract or rate card plus at least one invoice first." },
+      {
+        error:
+          "Automated BillGuarded audits currently require a CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
+      },
       { status: 409 },
     );
   }
