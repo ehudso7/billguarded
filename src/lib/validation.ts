@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
 export const intakeSchema = z.object({
   company: z.string().trim().min(2).max(120),
   email: z.string().trim().toLowerCase().email().max(254),
@@ -11,30 +13,35 @@ export const uploadRequestSchema = z.object({
   requestId: z.string().uuid(),
   filename: z.string().trim().min(1).max(180),
   contentType: z.string().trim().min(1).max(120),
-  size: z.number().int().positive().max(20 * 1024 * 1024),
+  size: z.number().int().positive().max(MAX_DOCUMENT_BYTES),
   kind: z.enum(["contract", "rate_card", "invoice"]),
 });
 
-export const confirmUploadSchema = uploadRequestSchema.omit({
-  filename: true,
-}).extend({
-  originalFilename: z.string().trim().min(1).max(180),
-  storagePath: z.string().trim().min(1).max(500),
-});
+export const confirmUploadSchema = uploadRequestSchema
+  .omit({ filename: true })
+  .extend({
+    originalFilename: z.string().trim().min(1).max(180),
+    storagePath: z.string().trim().min(1).max(500),
+  });
 
 export const checkoutSchema = z.object({
   requestId: z.string().uuid(),
   offer: z.enum(["audit_90_day", "continuous_monitor"]),
 });
 
-export const allowedDocumentTypes = new Set([
-  "application/pdf",
+const CSV_CONTENT_TYPES = new Set([
   "text/csv",
+  "application/csv",
   "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "image/jpeg",
-  "image/png",
+  "text/plain",
 ]);
+
+export function isAllowedCsvUpload(filename: string, contentType: string) {
+  return (
+    filename.trim().toLowerCase().endsWith(".csv") &&
+    CSV_CONTENT_TYPES.has(contentType.trim().toLowerCase())
+  );
+}
 
 export function safeFilename(filename: string) {
   const cleaned = filename
@@ -43,5 +50,5 @@ export function safeFilename(filename: string) {
     .replace(/-+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "");
 
-  return cleaned.slice(0, 120) || "document";
+  return cleaned.slice(0, 120) || "document.csv";
 }
