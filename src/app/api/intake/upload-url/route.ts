@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { hasIntakeAccess } from "@/lib/security/intake-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  allowedDocumentTypes,
+  isAllowedCsvUpload,
   safeFilename,
   uploadRequestSchema,
 } from "@/lib/validation";
@@ -22,9 +23,13 @@ export async function POST(request: Request) {
   }
 
   const { requestId, filename, contentType, size, kind } = parsed.data;
-  if (!allowedDocumentTypes.has(contentType)) {
+  if (!(await hasIntakeAccess(requestId))) {
+    return NextResponse.json({ error: "Audit access expired." }, { status: 403 });
+  }
+
+  if (!isAllowedCsvUpload(filename, contentType)) {
     return NextResponse.json(
-      { error: "Unsupported file type." },
+      { error: "BillGuarded currently accepts CSV files only." },
       { status: 415 },
     );
   }
@@ -113,7 +118,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: quotaViolation
-            ? "This audit has reached its document limit."
+            ? "This audit has reached its document or upload-size limit."
             : "Could not reserve the secure upload slot.",
         },
         { status: quotaViolation ? 409 : 500 },
@@ -140,8 +145,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({
-    path: storagePath,
-    token: data.token,
-  });
+  return NextResponse.json({ path: storagePath, token: data.token });
 }
