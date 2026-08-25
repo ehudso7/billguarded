@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": ".",
+    "outDir": ".test-dist",
+    "paths": {}
+  },
+  "include": [
+    "src/lib/audit-csv.ts",
+    "src/lib/audit-core.ts",
+    "tests/**/*.test.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}
