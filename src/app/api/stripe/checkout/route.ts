@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkoutSchema } from "@/lib/validation";
 import { OFFERS } from "@/lib/offers";
-import { stripePriceId } from "@/lib/stripe-prices";
+import { hasIntakeAccess } from "@/lib/security/intake-access";
 import { stripe } from "@/lib/stripe";
+import { stripePriceId } from "@/lib/stripe-prices";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { checkoutSchema, isAllowedCsvUpload } from "@/lib/validation";
 
-const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
-
-function isCsvDocument(document: {
-  content_type: string;
-  original_filename: string;
-}) {
-  return (
-    document.content_type === "text/csv" ||
-    document.original_filename.toLowerCase().endsWith(".csv")
-  );
-}
+const INTEGRATION_IDENTIFIER = "billguarded_rkqjvmtp";
 
 export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(
@@ -26,6 +17,20 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid checkout request." },
       { status: 400 },
+    );
+  }
+
+  if (!(await hasIntakeAccess(parsed.data.requestId))) {
+    return NextResponse.json({ error: "Audit access expired." }, { status: 403 });
+  }
+
+  if (parsed.data.offer === "continuous_monitor") {
+    return NextResponse.json(
+      {
+        error:
+          "Continuous Monitor is offered only after a completed first audit. No charge was created.",
+      },
+      { status: 409 },
     );
   }
 
@@ -51,19 +56,20 @@ export async function POST(request: Request) {
     .eq("audit_request_id", audit.id)
     .eq("upload_status", "uploaded");
 
-  const csvDocuments = documents?.filter(isCsvDocument) ?? [];
+  const csvDocuments =
+    documents?.filter((document) =>
+      isAllowedCsvUpload(document.original_filename, document.content_type),
+    ) ?? [];
   const hasCsvTerms = csvDocuments.some(
     (document) => document.kind === "contract" || document.kind === "rate_card",
   );
-  const hasCsvInvoice = csvDocuments.some(
-    (document) => document.kind === "invoice",
-  );
+  const hasCsvInvoice = csvDocuments.some((document) => document.kind === "invoice");
 
   if (documentError || !hasCsvTerms || !hasCsvInvoice) {
     return NextResponse.json(
       {
         error:
-          "Automated BillGuarded audits currently require a CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
+          "BillGuarded requires a CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
       },
       { status: 409 },
     );
@@ -77,27 +83,16 @@ export async function POST(request: Request) {
     company: audit.company.slice(0, 120),
   };
 
-  const common = {
+  const session = await stripe().checkout.sessions.create({
     customer_email: audit.email,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/start?offer=${offer.id}&cancelled=1`,
+    cancel_url: `${origin}/start?cancelled=1`,
     metadata,
     integration_identifier: INTEGRATION_IDENTIFIER,
-  };
-
-  const session =
-    offer.mode === "subscription"
-      ? await stripe().checkout.sessions.create({
-          ...common,
-          mode: "subscription",
-          subscription_data: { metadata },
-        })
-      : await stripe().checkout.sessions.create({
-          ...common,
-          mode: "payment",
-          customer_creation: "always",
-        });
+    mode: "payment",
+    customer_creation: "always",
+  });
 
   if (!session.url) {
     return NextResponse.json(
@@ -106,7 +101,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("audit_requests")
     .update({
       selected_offer: offer.id,
@@ -114,7 +109,16 @@ export async function POST(request: Request) {
       status: "checkout_started",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", audit.id);
+    .eq("id", audit.id)
+    .eq("status", "intake");
+
+  if (updateError) {
+    console.error("checkout_audit_state_update_failed", updateError.code);
+    return NextResponse.json(
+      { error: "Checkout was created but the audit state could not be saved. Contact support before paying." },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ url: session.url });
 }
