@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { hasIntakeAccess } from "@/lib/security/intake-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  allowedDocumentTypes,
   confirmUploadSchema,
+  isAllowedCsvUpload,
 } from "@/lib/validation";
 
 function storageLocation(path: string) {
@@ -18,11 +19,18 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
 
-  if (!parsed.success || !allowedDocumentTypes.has(parsed.data.contentType)) {
+  if (
+    !parsed.success ||
+    !isAllowedCsvUpload(parsed.data.originalFilename, parsed.data.contentType)
+  ) {
     return NextResponse.json(
-      { error: "Invalid uploaded document." },
+      { error: "Invalid uploaded CSV document." },
       { status: 400 },
     );
+  }
+
+  if (!(await hasIntakeAccess(parsed.data.requestId))) {
+    return NextResponse.json({ error: "Audit access expired." }, { status: 403 });
   }
 
   const expectedPrefix = `${parsed.data.requestId}/${parsed.data.kind}/`;
@@ -78,10 +86,7 @@ export async function POST(request: Request) {
   const location = storageLocation(parsed.data.storagePath);
   const { data: objects, error: storageError } = await supabase.storage
     .from("audit-documents")
-    .list(location.directory, {
-      limit: 10,
-      search: location.filename,
-    });
+    .list(location.directory, { limit: 10, search: location.filename });
 
   const storedObject = objects?.find(
     (object) => object.id !== null && object.name === location.filename,
@@ -108,10 +113,7 @@ export async function POST(request: Request) {
 
   const { error: updateError } = await supabase
     .from("audit_documents")
-    .update({
-      upload_status: "uploaded",
-      uploaded_at: new Date().toISOString(),
-    })
+    .update({ upload_status: "uploaded", uploaded_at: new Date().toISOString() })
     .eq("id", reservation.id)
     .eq("upload_status", "pending");
 
