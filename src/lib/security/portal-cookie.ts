@@ -7,7 +7,7 @@ import { supabaseServerEnv } from "@/lib/env";
 
 const COOKIE_VERSION = "v1";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const SIGNING_CONTEXT = "reqovr:billing-cookie:v1";
+const SIGNING_CONTEXT = "billguarded:billing-cookie:v1";
 
 type PortalPayload = {
   customerId: string;
@@ -55,13 +55,7 @@ export function verifyPortalCookie(value: string | undefined | null) {
   if (!value) return null;
 
   const [version, encoded, signature] = value.split(".");
-  if (
-    version !== COOKIE_VERSION ||
-    !encoded ||
-    !signature
-  ) {
-    return null;
-  }
+  if (version !== COOKIE_VERSION || !encoded || !signature) return null;
 
   const expected = sign(`${version}.${encoded}`);
   const actualBuffer = Buffer.from(signature);
@@ -94,4 +88,4 @@ export function verifyPortalCookie(value: string | undefined | null) {
   }
 }
 
-export const portalCookieName = "reqovr_billing_access";
+export const portalCookieName = "billguarded_billing_access";
