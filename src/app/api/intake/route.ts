@@ -1,14 +1,54 @@
 import { createHash, randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { intakeSchema } from "@/lib/validation";
 
+export const maxDuration = 60;
+
 function intakeRateKey(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for");
+  const forwarded =
+    request.headers.get("x-vercel-forwarded-for") ??
+    request.headers.get("x-forwarded-for");
   const address = forwarded?.split(",")[0]?.trim() || "unknown";
   return createHash("sha256")
     .update(`billguarded:intake:${address}`, "utf8")
     .digest("hex");
+}
+
+async function cleanupAbandonedIntakes() {
+  const supabase = supabaseAdmin();
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: stale, error } = await supabase
+    .from("audit_requests")
+    .select("id")
+    .eq("status", "intake")
+    .lt("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (error || !stale?.length) return;
+
+  for (const audit of stale) {
+    const { data: documents, error: documentError } = await supabase
+      .from("audit_documents")
+      .select("storage_path")
+      .eq("audit_request_id", audit.id);
+    if (documentError) continue;
+
+    const paths = (documents ?? []).map((document) => document.storage_path);
+    if (paths.length > 0) {
+      const { error: removeError } = await supabase.storage
+        .from("audit-documents")
+        .remove(paths);
+      if (removeError) continue;
+    }
+
+    await supabase
+      .from("audit_requests")
+      .delete()
+      .eq("id", audit.id)
+      .eq("status", "intake");
+  }
 }
 
 export async function POST(request: Request) {
@@ -40,10 +80,21 @@ export async function POST(request: Request) {
 
   if (allowed !== true) {
     return NextResponse.json(
-      { error: "Too many audit workspaces were created from this network. Try again later or contact support@billguarded.com." },
+      {
+        error:
+          "Too many audit workspaces were created from this network. Try again later or contact support@billguarded.com.",
+      },
       { status: 429 },
     );
   }
+
+  after(async () => {
+    try {
+      await cleanupAbandonedIntakes();
+    } catch (error) {
+      console.error("abandoned_intake_cleanup_failed", error);
+    }
+  });
 
   const accessToken = randomBytes(32).toString("base64url");
   const accessTokenHash = createHash("sha256")
