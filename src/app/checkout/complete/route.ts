@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { processAuditRequest } from "@/lib/audit-engine";
+import { applicationOrigin } from "@/lib/origin";
 import { isOfferId } from "@/lib/offers";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -119,22 +120,23 @@ async function startPaidAudit(requestId: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const origin = applicationOrigin(request.url);
   const sessionId = request.nextUrl.searchParams.get("session_id");
   if (!sessionId || !sessionId.startsWith("cs_")) {
-    return NextResponse.redirect(new URL("/start?error=checkout", request.url));
+    return NextResponse.redirect(new URL("/start?error=checkout", origin));
   }
 
   const session = await stripe().checkout.sessions.retrieve(sessionId);
   if (session.status !== "complete") {
     return NextResponse.redirect(
-      new URL("/start?error=checkout_not_complete", request.url),
+      new URL("/start?error=checkout_not_complete", origin),
     );
   }
 
   const customerId = customerIdFromSession(session.customer);
   if (!customerId) {
     return NextResponse.redirect(
-      new URL("/start?error=customer_missing", request.url),
+      new URL("/start?error=customer_missing", origin),
     );
   }
 
@@ -142,7 +144,7 @@ export async function GET(request: NextRequest) {
     session.payment_status === "paid" ||
     session.payment_status === "no_payment_required";
   const cookie = createPortalCookie(customerId);
-  const target = new URL("/success", request.url);
+  const target = new URL("/success", origin);
   const requestId = session.metadata?.request_id;
   const offer = session.metadata?.offer;
 
