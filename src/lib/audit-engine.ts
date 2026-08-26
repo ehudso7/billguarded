@@ -1,16 +1,58 @@
-import { firstValue, normalizeCode, parseCsv, parseMoneyToCents, parseNumber, type CsvRow } from "@/lib/audit-csv";
+import {
+  firstValue,
+  normalizeCode,
+  parseCsv,
+  parseMoneyToCents,
+  parseNumber,
+  type CsvRow,
+} from "@/lib/audit-csv";
+import { conservativePotentialRecoveryCents } from "@/lib/audit-math";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-const SERVICE_ALIASES = ["service_code", "charge_code", "fee_code", "service", "charge_type", "fee_type", "description"];
-const RATE_ALIASES = ["rate", "unit_rate", "contract_rate", "agreed_rate", "price", "unit_price"];
+const SERVICE_ALIASES = [
+  "service_code",
+  "charge_code",
+  "fee_code",
+  "service",
+  "charge_type",
+  "fee_type",
+  "description",
+];
+const RATE_ALIASES = [
+  "rate",
+  "unit_rate",
+  "contract_rate",
+  "agreed_rate",
+  "price",
+  "unit_price",
+];
 const QUANTITY_ALIASES = ["quantity", "qty", "units", "count", "volume"];
-const AMOUNT_ALIASES = ["amount", "line_total", "total", "extended_amount", "charge_amount", "billed_amount"];
-const REFERENCE_ALIASES = ["line_id", "reference", "order_id", "shipment_id", "transaction_id", "invoice_line_id", "tracking_number"];
+const AMOUNT_ALIASES = [
+  "amount",
+  "line_total",
+  "total",
+  "extended_amount",
+  "charge_amount",
+  "billed_amount",
+];
+const REFERENCE_ALIASES = [
+  "line_id",
+  "reference",
+  "order_id",
+  "shipment_id",
+  "transaction_id",
+  "invoice_line_id",
+  "tracking_number",
+];
 
 export type AuditFindingInsert = {
   audit_run_id: string;
   audit_request_id: string;
-  finding_type: "duplicate_charge" | "unsupported_fee" | "arithmetic_mismatch" | "rate_mismatch";
+  finding_type:
+    | "duplicate_charge"
+    | "unsupported_fee"
+    | "arithmetic_mismatch"
+    | "rate_mismatch";
   severity: "low" | "medium" | "high";
   source_document_id: string;
   source_row: number;
@@ -38,12 +80,23 @@ type Rate = {
   sourceRow: number;
 };
 
+type DuplicateOrigin = {
+  documentId: string;
+  filename: string;
+  row: number;
+};
+
 function isCsvDocument(document: DocumentRow) {
-  return document.content_type === "text/csv" || document.original_filename.toLowerCase().endsWith(".csv");
+  return (
+    document.content_type === "text/csv" ||
+    document.original_filename.toLowerCase().endsWith(".csv")
+  );
 }
 
 async function documentText(document: DocumentRow) {
-  const { data, error } = await supabaseAdmin().storage.from("audit-documents").download(document.storage_path);
+  const { data, error } = await supabaseAdmin().storage
+    .from("audit-documents")
+    .download(document.storage_path);
   if (error) throw error;
   return data.text();
 }
@@ -98,9 +151,9 @@ function analyzeInvoiceRows(input: {
   rateMap: Map<string, Rate>;
   runId: string;
   requestId: string;
+  seenDuplicates: Map<string, DuplicateOrigin>;
 }) {
   const findings: AuditFindingInsert[] = [];
-  const seen = new Map<string, number>();
 
   input.rows.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -112,9 +165,15 @@ function analyzeInvoiceRows(input: {
     const contractRate = code ? input.rateMap.get(code) ?? null : null;
 
     if (ref) {
-      const duplicateKey = [ref, code ?? "", qty ?? "", invoiceUnitRate ?? "", amount ?? ""].join("|");
-      const firstRow = seen.get(duplicateKey);
-      if (firstRow !== undefined) {
+      const duplicateKey = [
+        ref,
+        code ?? "",
+        qty ?? "",
+        invoiceUnitRate ?? "",
+        amount ?? "",
+      ].join("|");
+      const first = input.seenDuplicates.get(duplicateKey);
+      if (first) {
         findings.push({
           audit_run_id: input.runId,
           audit_request_id: input.requestId,
@@ -123,14 +182,23 @@ function analyzeInvoiceRows(input: {
           source_document_id: input.document.id,
           source_row: rowNumber,
           service_code: code,
-          description: `Possible duplicate charge matching row ${firstRow}.`,
+          description: `Possible duplicate charge matching ${first.filename} row ${first.row}.`,
           billed_amount_cents: amount,
           expected_amount_cents: 0,
           potential_recovery_cents: Math.max(0, amount ?? 0),
-          evidence: { reference: ref, matching_row: firstRow },
+          evidence: {
+            reference: ref,
+            matching_document_id: first.documentId,
+            matching_filename: first.filename,
+            matching_row: first.row,
+          },
         });
       } else {
-        seen.set(duplicateKey, rowNumber);
+        input.seenDuplicates.set(duplicateKey, {
+          documentId: input.document.id,
+          filename: input.document.original_filename,
+          row: rowNumber,
+        });
       }
     }
 
@@ -158,11 +226,13 @@ function analyzeInvoiceRows(input: {
           audit_run_id: input.runId,
           audit_request_id: input.requestId,
           finding_type: "arithmetic_mismatch",
-          severity: Math.abs(amount - calculated) >= 50000 ? "high" : "medium",
+          severity:
+            Math.abs(amount - calculated) >= 50000 ? "high" : "medium",
           source_document_id: input.document.id,
           source_row: rowNumber,
           service_code: code,
-          description: "Billed line total does not equal quantity × billed unit rate.",
+          description:
+            "Billed line total does not equal quantity × billed unit rate.",
           billed_amount_cents: amount,
           expected_amount_cents: calculated,
           potential_recovery_cents: potentialRecovery(amount, calculated),
@@ -171,17 +241,26 @@ function analyzeInvoiceRows(input: {
       }
     }
 
-    if (contractRate && invoiceUnitRate !== null && Math.abs(invoiceUnitRate - contractRate.rateCents) > 1) {
-      const expected = qty !== null ? Math.round(qty * contractRate.rateCents) : null;
+    if (
+      contractRate &&
+      invoiceUnitRate !== null &&
+      Math.abs(invoiceUnitRate - contractRate.rateCents) > 1
+    ) {
+      const expected =
+        qty !== null ? Math.round(qty * contractRate.rateCents) : null;
       findings.push({
         audit_run_id: input.runId,
         audit_request_id: input.requestId,
         finding_type: "rate_mismatch",
-        severity: amount !== null && expected !== null && amount - expected >= 50000 ? "high" : "medium",
+        severity:
+          amount !== null && expected !== null && amount - expected >= 50000
+            ? "high"
+            : "medium",
         source_document_id: input.document.id,
         source_row: rowNumber,
         service_code: code,
-        description: "Billed unit rate differs from the supplied contract/rate-card rate.",
+        description:
+          "Billed unit rate differs from the supplied contract/rate-card rate.",
         billed_amount_cents: amount,
         expected_amount_cents: expected,
         potential_recovery_cents: potentialRecovery(amount, expected),
@@ -223,12 +302,19 @@ export async function processAuditRequest(requestId: string) {
 
   const { data: run, error: runError } = await supabase
     .from("audit_runs")
-    .insert({ audit_request_id: requestId, status: "processing", started_at: new Date().toISOString() })
+    .insert({
+      audit_request_id: requestId,
+      status: "processing",
+      started_at: new Date().toISOString(),
+    })
     .select("id")
     .single();
   if (runError) throw runError;
 
-  await supabase.from("audit_requests").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", requestId);
+  await supabase
+    .from("audit_requests")
+    .update({ status: "processing", updated_at: new Date().toISOString() })
+    .eq("id", requestId);
 
   try {
     const { data: documents, error: documentsError } = await supabase
@@ -240,57 +326,99 @@ export async function processAuditRequest(requestId: string) {
 
     const typedDocuments = (documents ?? []) as DocumentRow[];
     const csvDocuments = typedDocuments.filter(isCsvDocument);
-    const termsDocument = csvDocuments.find((document) => document.kind === "contract" || document.kind === "rate_card");
-    const invoiceDocuments = csvDocuments.filter((document) => document.kind === "invoice");
+    const termsDocument = csvDocuments.find(
+      (document) =>
+        document.kind === "contract" || document.kind === "rate_card",
+    );
+    const invoiceDocuments = csvDocuments.filter(
+      (document) => document.kind === "invoice",
+    );
 
     if (!termsDocument || invoiceDocuments.length === 0) {
-      await supabase.from("audit_runs").update({
-        status: "needs_review",
-        source_document_count: typedDocuments.length,
-        error_code: "structured_csv_required",
-        error_message: "Deterministic v1 requires a CSV contract/rate card and at least one CSV invoice.",
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", run.id);
-      await supabase.from("audit_requests").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", requestId);
+      await supabase
+        .from("audit_runs")
+        .update({
+          status: "needs_review",
+          source_document_count: typedDocuments.length,
+          error_code: "structured_csv_required",
+          error_message:
+            "Deterministic v1 requires a CSV contract/rate card and at least one CSV invoice.",
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", run.id);
+      await supabase
+        .from("audit_requests")
+        .update({ status: "paid", updated_at: new Date().toISOString() })
+        .eq("id", requestId);
       return;
     }
 
     const rateRows = parseCsv(await documentText(termsDocument));
     const rateMap = buildRateMap(rateRows, termsDocument);
-    if (rateMap.size === 0) throw new Error("rate_card_has_no_recognized_rates");
+    if (rateMap.size === 0) {
+      throw new Error("rate_card_has_no_recognized_rates");
+    }
 
     const findings: AuditFindingInsert[] = [];
+    const seenDuplicates = new Map<string, DuplicateOrigin>();
     for (const document of invoiceDocuments) {
       const rows = parseCsv(await documentText(document));
-      findings.push(...analyzeInvoiceRows({ rows, document, rateMap, runId: run.id, requestId }));
+      if (rows.length === 0) {
+        throw new Error(`invoice_has_no_data_rows:${document.original_filename}`);
+      }
+      findings.push(
+        ...analyzeInvoiceRows({
+          rows,
+          document,
+          rateMap,
+          runId: run.id,
+          requestId,
+          seenDuplicates,
+        }),
+      );
     }
 
     if (findings.length > 0) {
-      const { error: findingsError } = await supabase.from("audit_findings").insert(findings);
+      const { error: findingsError } = await supabase
+        .from("audit_findings")
+        .insert(findings);
       if (findingsError) throw findingsError;
     }
 
-    const potentialRecoveryCents = findings.reduce((sum, finding) => sum + finding.potential_recovery_cents, 0);
-    await supabase.from("audit_runs").update({
-      status: "complete",
-      source_document_count: csvDocuments.length,
-      finding_count: findings.length,
-      potential_recovery_cents: potentialRecoveryCents,
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", run.id);
-    await supabase.from("audit_requests").update({ status: "complete", updated_at: new Date().toISOString() }).eq("id", requestId);
+    const potentialRecoveryCents = conservativePotentialRecoveryCents(findings);
+    await supabase
+      .from("audit_runs")
+      .update({
+        status: "complete",
+        source_document_count: csvDocuments.length,
+        finding_count: findings.length,
+        potential_recovery_cents: potentialRecoveryCents,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", run.id);
+    await supabase
+      .from("audit_requests")
+      .update({ status: "complete", updated_at: new Date().toISOString() })
+      .eq("id", requestId);
   } catch (error) {
-    const message = error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
-    await supabase.from("audit_runs").update({
-      status: "failed",
-      error_code: "audit_engine_failed",
-      error_message: message,
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", run.id);
-    await supabase.from("audit_requests").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", requestId);
+    const message =
+      error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
+    await supabase
+      .from("audit_runs")
+      .update({
+        status: "failed",
+        error_code: "audit_engine_failed",
+        error_message: message,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", run.id);
+    await supabase
+      .from("audit_requests")
+      .update({ status: "paid", updated_at: new Date().toISOString() })
+      .eq("id", requestId);
     throw error;
   }
 }
