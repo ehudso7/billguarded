@@ -4,7 +4,7 @@ let cachedSecret: Promise<string> | undefined;
 
 async function loadStripeWebhookSecret() {
   const { data, error } = await supabaseAdmin().rpc(
-    "reqovr_stripe_webhook_secret",
+    "billguarded_stripe_webhook_secret",
   );
 
   if (error || typeof data !== "string" || !data.startsWith("whsec_")) {

@@ -32,7 +32,9 @@ function dollars(cents: number | null | undefined) {
 }
 
 function label(value: string) {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 export default async function SuccessPage({ searchParams }: SuccessPageProps) {
@@ -62,7 +64,9 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
       auditStatus = audit.status;
       const { data: run } = await supabase
         .from("audit_runs")
-        .select("id,status,finding_count,potential_recovery_cents,error_code,error_message")
+        .select(
+          "id,status,finding_count,potential_recovery_cents,error_code,error_message",
+        )
         .eq("audit_request_id", audit.id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -76,7 +80,9 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
         if (run.status === "complete") {
           const { data } = await supabase
             .from("audit_findings")
-            .select("id,finding_type,severity,source_row,service_code,description,billed_amount_cents,expected_amount_cents,potential_recovery_cents")
+            .select(
+              "id,finding_type,severity,source_row,service_code,description,billed_amount_cents,expected_amount_cents,potential_recovery_cents",
+            )
             .eq("audit_run_id", run.id)
             .order("potential_recovery_cents", { ascending: false })
             .limit(100);
@@ -86,15 +92,23 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
     }
   }
 
-  const processing = !pending && (auditStatus === "paid" || auditStatus === "processing" || runStatus === "queued" || runStatus === "processing");
+  const processing =
+    !pending &&
+    (auditStatus === "paid" ||
+      auditStatus === "processing" ||
+      runStatus === "queued" ||
+      runStatus === "processing");
   const complete = runStatus === "complete";
   const needsReview = runStatus === "needs_review";
+  const failed = runStatus === "failed";
+
+  const icon = pending || processing ? "…" : failed || needsReview ? "!" : "✓";
 
   return (
     <main className="center-page">
       <section className="success-card">
         <div className="success-icon" aria-hidden="true">
-          {pending || processing ? "…" : "✓"}
+          {icon}
         </div>
         <span className="eyebrow">
           {pending
@@ -103,9 +117,11 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
               ? "Audit processing"
               : complete
                 ? "Audit complete"
-                : needsReview
-                  ? "Structured review needed"
-                  : "Payment confirmed"}
+                : failed
+                  ? "Audit needs attention"
+                  : needsReview
+                    ? "Structured review needed"
+                    : "Payment confirmed"}
         </span>
         <h1>
           {pending
@@ -114,9 +130,11 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
               ? "BillGuarded is reconciling your files."
               : complete
                 ? `${dollars(potentialRecoveryCents)} in potential recovery surfaced.`
-                : needsReview
-                  ? "Your files need a structured-data pass."
-                  : "Your BillGuarded workspace is funded."}
+                : failed
+                  ? "We could not complete this audit automatically."
+                  : needsReview
+                    ? "Your files need a structured-data pass."
+                    : "Your BillGuarded workspace is funded."}
         </h1>
         <p className="muted">
           {pending
@@ -124,10 +142,12 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
             : processing
               ? "The deterministic engine is checking duplicate charges, unsupported fee codes, line arithmetic, and billed rates against the supplied rate card. Refresh this page in a moment."
               : complete
-                ? `${findingCount} evidence-backed finding${findingCount === 1 ? "" : "s"} were generated from the structured files you supplied. Review each item against operational context before disputing a charge.`
-                : needsReview
-                  ? "Deterministic v1 requires a CSV rate card and at least one CSV invoice. Your uploaded files remain private and intact; no unsupported conclusion was generated."
-                  : "Stripe confirmed the checkout. Your audit request is recorded and ready for processing."}
+                ? `${findingCount} evidence-backed finding${findingCount === 1 ? "" : "s"} were generated from the structured files you supplied. The recovery total is conservatively de-duplicated by source row. Review each item against operational context before disputing a charge.`
+                : failed
+                  ? "Your payment and uploaded files remain recorded. Do not pay again. Contact support@billguarded.com and include your company name so the audit can be reviewed without creating a duplicate checkout."
+                  : needsReview
+                    ? "The current deterministic engine requires a CSV rate card and at least one CSV invoice. Your uploaded files remain private and intact; no unsupported conclusion was generated."
+                    : "Stripe confirmed the checkout. Your audit request is recorded and ready for processing."}
         </p>
 
         {complete && findings.length > 0 ? (
@@ -143,7 +163,9 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
                   </div>
                   <div>{finding.description}</div>
                   <div className="muted">
-                    Billed {dollars(finding.billed_amount_cents)} · Expected {dollars(finding.expected_amount_cents)} · Potential recovery {dollars(finding.potential_recovery_cents)}
+                    Billed {dollars(finding.billed_amount_cents)} · Expected{" "}
+                    {dollars(finding.expected_amount_cents)} · Potential recovery{" "}
+                    {dollars(finding.potential_recovery_cents)}
                   </div>
                 </div>
               </div>
@@ -151,11 +173,30 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
           </div>
         ) : null}
 
+        {complete && findings.length === 0 ? (
+          <p className="muted">
+            No supported discrepancy pattern was detected in the submitted CSV
+            rows. That is not a guarantee that the underlying 3PL billing is
+            error-free; it means the deterministic checks did not surface a
+            supported finding from this data set.
+          </p>
+        ) : null}
+
         <div className="hero-actions">
           {processing ? (
-            <Link className="button primary" href={`/success?request=${encodeURIComponent(params.request ?? "")}`}>
+            <Link
+              className="button primary"
+              href={`/success?request=${encodeURIComponent(params.request ?? "")}`}
+            >
               Refresh audit status
             </Link>
+          ) : failed || needsReview ? (
+            <a
+              className="button primary"
+              href="mailto:support@billguarded.com?subject=BillGuarded%20audit%20review"
+            >
+              Contact support
+            </a>
           ) : (
             <Link className="button primary" href="/">
               Return home

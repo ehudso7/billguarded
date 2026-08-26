@@ -1,24 +1,17 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
-import { useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
-import type { OfferId } from "@/lib/offers";
 
-type IntakeResponse = { requestId: string };
+type IntakeResponse = { requestId: string; accessToken: string };
 type SignedUploadResponse = {
   path: string;
   token: string;
 };
 type CheckoutResponse = { url: string };
 
-const ACCEPT =
-  ".pdf,.csv,.xls,.xlsx,.png,.jpg,.jpeg,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg";
+const ACCEPT = ".csv,text/csv,application/vnd.ms-excel";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-
-function selectedOfferFromQuery(value: string | null): OfferId {
-  return value === "continuous_monitor" ? "continuous_monitor" : "audit_90_day";
-}
 
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T & { error?: string };
@@ -28,11 +21,22 @@ async function jsonOrThrow<T>(response: Response): Promise<T> {
   return body;
 }
 
+function csvContentType(file: File) {
+  return file.type === "application/vnd.ms-excel"
+    ? "application/vnd.ms-excel"
+    : "text/csv";
+}
+
+function validateCsvFile(file: File) {
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    throw new Error(`${file.name} is not a CSV file.`);
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    throw new Error(`${file.name} is larger than 20 MB.`);
+  }
+}
+
 export default function IntakeForm() {
-  const searchParams = useSearchParams();
-  const [offer, setOffer] = useState<OfferId>(() =>
-    selectedOfferFromQuery(searchParams.get("offer")),
-  );
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [invoiceFiles, setInvoiceFiles] = useState<File[]>([]);
   const [status, setStatus] = useState("Ready.");
@@ -48,10 +52,13 @@ export default function IntakeForm() {
 
   async function uploadDocument(
     requestId: string,
+    accessToken: string,
     file: File,
     kind: "contract" | "invoice",
   ) {
     if (!supabase) throw new Error("Upload service is not configured.");
+    validateCsvFile(file);
+    const contentType = csvContentType(file);
 
     const signed = await jsonOrThrow<SignedUploadResponse>(
       await fetch("/api/intake/upload-url", {
@@ -59,8 +66,9 @@ export default function IntakeForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestId,
+          accessToken,
           filename: file.name,
-          contentType: file.type || "application/octet-stream",
+          contentType,
           size: file.size,
           kind,
         }),
@@ -69,7 +77,9 @@ export default function IntakeForm() {
 
     const { error: uploadError } = await supabase.storage
       .from("audit-documents")
-      .uploadToSignedUrl(signed.path, signed.token, file);
+      .uploadToSignedUrl(signed.path, signed.token, file, {
+        contentType,
+      });
 
     if (uploadError) throw uploadError;
 
@@ -79,9 +89,10 @@ export default function IntakeForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestId,
+          accessToken,
           storagePath: signed.path,
           originalFilename: file.name,
-          contentType: file.type || "application/octet-stream",
+          contentType,
           size: file.size,
           kind,
         }),
@@ -94,18 +105,18 @@ export default function IntakeForm() {
     setError(null);
 
     if (!contractFile) {
-      setError("Add the contract or rate card first.");
+      setError("Add the CSV contract or rate card first.");
       return;
     }
     if (invoiceFiles.length === 0) {
-      setError("Add at least one invoice.");
+      setError("Add at least one CSV invoice.");
       return;
     }
 
-    const allFiles = [contractFile, ...invoiceFiles];
-    const tooLarge = allFiles.find((file) => file.size > MAX_FILE_BYTES);
-    if (tooLarge) {
-      setError(`${tooLarge.name} is larger than 20 MB.`);
+    try {
+      [contractFile, ...invoiceFiles].forEach(validateCsvFile);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Use CSV files only.");
       return;
     }
 
@@ -113,7 +124,7 @@ export default function IntakeForm() {
     setBusy(true);
 
     try {
-      setStatus("Creating your audit workspace…");
+      setStatus("Creating your private audit workspace…");
       const intake = await jsonOrThrow<IntakeResponse>(
         await fetch("/api/intake", {
           method: "POST",
@@ -128,13 +139,23 @@ export default function IntakeForm() {
       );
 
       setStatus("Uploading contract or rate card…");
-      await uploadDocument(intake.requestId, contractFile, "contract");
+      await uploadDocument(
+        intake.requestId,
+        intake.accessToken,
+        contractFile,
+        "contract",
+      );
 
       for (let index = 0; index < invoiceFiles.length; index += 1) {
         setStatus(
           `Uploading invoice ${index + 1} of ${invoiceFiles.length}…`,
         );
-        await uploadDocument(intake.requestId, invoiceFiles[index], "invoice");
+        await uploadDocument(
+          intake.requestId,
+          intake.accessToken,
+          invoiceFiles[index],
+          "invoice",
+        );
       }
 
       setStatus("Opening secure Stripe Checkout…");
@@ -144,7 +165,8 @@ export default function IntakeForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             requestId: intake.requestId,
-            offer,
+            accessToken: intake.accessToken,
+            offer: "audit_90_day",
           }),
         }),
       );
@@ -166,11 +188,11 @@ export default function IntakeForm() {
       <div className="form-grid">
         <div className="field full">
           <label htmlFor="company">Company</label>
-          <input id="company" name="company" required minLength={2} />
+          <input id="company" name="company" required minLength={2} autoComplete="organization" />
         </div>
         <div className="field full">
           <label htmlFor="email">Work email</label>
-          <input id="email" name="email" type="email" required />
+          <input id="email" name="email" type="email" required autoComplete="email" />
         </div>
         <div className="field">
           <label htmlFor="monthly3plSpend">Approx. monthly 3PL spend ($)</label>
@@ -180,6 +202,7 @@ export default function IntakeForm() {
             type="number"
             min="0"
             step="100"
+            inputMode="numeric"
             required
           />
         </div>
@@ -191,13 +214,12 @@ export default function IntakeForm() {
             type="number"
             min="1"
             max="10000"
+            inputMode="numeric"
             required
           />
         </div>
         <div className="field full">
-          <label htmlFor="contract">
-            Contract or rate card — PDF, CSV, Excel, PNG, JPG
-          </label>
+          <label htmlFor="contract">Contract or rate card — CSV</label>
           <div className="file-box">
             <input
               id="contract"
@@ -209,9 +231,12 @@ export default function IntakeForm() {
               }
             />
           </div>
+          <span className="field-help">
+            Include a service/fee code and agreed unit rate. One file, up to 20 MB.
+          </span>
         </div>
         <div className="field full">
-          <label htmlFor="invoices">Recent invoices — up to 10 files</label>
+          <label htmlFor="invoices">Recent invoices — CSV, up to 10 files</label>
           <div className="file-box">
             <input
               id="invoices"
@@ -226,48 +251,24 @@ export default function IntakeForm() {
               }
             />
           </div>
+          <span className="field-help">
+            Best results include a reference/order ID, service code, quantity, unit rate, and line total.
+          </span>
         </div>
       </div>
 
-      <div className="offer-picker" aria-label="Choose audit plan">
-        <label
-          className={`offer-option ${
-            offer === "audit_90_day" ? "selected" : ""
-          }`}
-        >
-          <span>
-            <strong>Full 90-Day Audit</strong>
-            <span className="muted"> — $1,500 one time</span>
-          </span>
-          <input
-            type="radio"
-            name="offer"
-            checked={offer === "audit_90_day"}
-            onChange={() => setOffer("audit_90_day")}
-          />
-        </label>
-        <label
-          className={`offer-option ${
-            offer === "continuous_monitor" ? "selected" : ""
-          }`}
-        >
-          <span>
-            <strong>Continuous Monitor</strong>
-            <span className="muted"> — $599/month</span>
-          </span>
-          <input
-            type="radio"
-            name="offer"
-            checked={offer === "continuous_monitor"}
-            onChange={() => setOffer("continuous_monitor")}
-          />
-        </label>
+      <div className="offer-option selected" aria-label="Selected audit plan">
+        <span>
+          <strong>Full 90-Day Audit</strong>
+          <span className="muted"> — $1,500 one time</span>
+        </span>
+        <span className="eyebrow">Production ready</span>
       </div>
 
       <button className="button primary" type="submit" disabled={busy}>
         {busy ? "Preparing secure checkout…" : "Upload and continue to Stripe →"}
       </button>
-      <p className={`status ${error ? "error" : ""}`}>
+      <p className={`status ${error ? "error" : ""}`} aria-live="polite">
         {error || status}
       </p>
     </form>

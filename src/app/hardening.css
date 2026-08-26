@@ -1,0 +1,116 @@
+:where(a, button, input):focus-visible {
+  outline: 3px solid rgba(107, 240, 189, 0.72);
+  outline-offset: 3px;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.compact-card {
+  min-height: 220px;
+}
+
+.compact-card h3 {
+  margin: 12px 0 10px;
+  font-size: 24px;
+  letter-spacing: -0.035em;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.footer > div:first-child {
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
+
+.legal-shell {
+  width: min(820px, calc(100% - 32px));
+  margin: 0 auto;
+  padding-bottom: 80px;
+}
+
+.legal-card {
+  padding: clamp(24px, 5vw, 44px);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: rgba(12, 28, 23, 0.88);
+  box-shadow: var(--shadow);
+}
+
+.legal-card h1 {
+  margin: 10px 0 20px;
+  font-size: clamp(38px, 6vw, 62px);
+  letter-spacing: -0.055em;
+}
+
+.legal-card h2 {
+  margin: 34px 0 10px;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.legal-card p,
+.legal-card li {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.legal-card a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .trust-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer {
+    flex-direction: column;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

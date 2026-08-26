@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  allowedDocumentTypes,
   confirmUploadSchema,
+  isSupportedCsvUpload,
 } from "@/lib/validation";
 
 function storageLocation(path: string) {
@@ -18,7 +19,13 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
 
-  if (!parsed.success || !allowedDocumentTypes.has(parsed.data.contentType)) {
+  if (
+    !parsed.success ||
+    !isSupportedCsvUpload(
+      parsed.data.originalFilename,
+      parsed.data.contentType,
+    )
+  ) {
     return NextResponse.json(
       { error: "Invalid uploaded document." },
       { status: 400 },
@@ -38,6 +45,7 @@ export async function POST(request: Request) {
     .from("audit_requests")
     .select("id, status")
     .eq("id", parsed.data.requestId)
+    .eq("access_token_hash", intakeAccessTokenHash(parsed.data.accessToken))
     .maybeSingle();
 
   if (auditError || !audit || audit.status !== "intake") {

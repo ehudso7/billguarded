@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import IntakeForm from "./intake-form";
 
 export default function StartPage() {
@@ -18,15 +17,19 @@ export default function StartPage() {
 
         <section className="form-card">
           <span className="eyebrow">Start the reconciliation</span>
-          <h1>Show us what you were billed.</h1>
+          <h1>Upload clean billing data. Get evidence you can inspect.</h1>
           <p>
-            Add your commercial terms and recent invoices. Files are stored in
-            a private bucket and the checkout does not begin until the upload
-            completes.
+            Production audits currently use structured CSV files so every
+            finding can be reproduced deterministically. Upload one CSV
+            contract or rate card plus up to 10 CSV invoices. Files remain in
+            private storage and Stripe Checkout does not open until the upload
+            is complete and validated.
           </p>
-          <Suspense fallback={<p className="status">Loading intake…</p>}>
-            <IntakeForm />
-          </Suspense>
+          <IntakeForm />
+          <p className="status">
+            Need help preparing CSVs? Email support@billguarded.com before
+            paying. We will not charge for an unsupported file set.
+          </p>
         </section>
       </div>
     </main>
