@@ -279,6 +279,15 @@ function analyzeInvoiceRows(input: {
   return findings;
 }
 
+function deterministicInputError(message: string) {
+  return (
+    message === "rate_card_has_no_recognized_rates" ||
+    message === "csv_unclosed_quote" ||
+    message === "csv_headers_invalid" ||
+    message.startsWith("invoice_has_no_data_rows:")
+  );
+}
+
 export async function processAuditRequest(requestId: string) {
   const supabase = supabaseAdmin();
 
@@ -294,7 +303,7 @@ export async function processAuditRequest(requestId: string) {
     .from("audit_runs")
     .select("id,status")
     .eq("audit_request_id", requestId)
-    .in("status", ["queued", "processing", "complete"])
+    .in("status", ["queued", "processing", "complete", "needs_review"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -405,11 +414,15 @@ export async function processAuditRequest(requestId: string) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
+    const inputFailure = deterministicInputError(message);
+
     await supabase
       .from("audit_runs")
       .update({
-        status: "failed",
-        error_code: "audit_engine_failed",
+        status: inputFailure ? "needs_review" : "failed",
+        error_code: inputFailure
+          ? "structured_data_invalid"
+          : "audit_engine_failed",
         error_message: message,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -419,6 +432,7 @@ export async function processAuditRequest(requestId: string) {
       .from("audit_requests")
       .update({ status: "paid", updated_at: new Date().toISOString() })
       .eq("id", requestId);
-    throw error;
+
+    if (!inputFailure) throw error;
   }
 }
