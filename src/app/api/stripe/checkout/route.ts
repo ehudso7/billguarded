@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { checkoutSchema } from "@/lib/validation";
 import { OFFERS } from "@/lib/offers";
+import { applicationOrigin } from "@/lib/origin";
+import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { stripePriceId } from "@/lib/stripe-prices";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -29,13 +31,24 @@ export async function POST(request: Request) {
     );
   }
 
-  const offer = OFFERS[parsed.data.offer];
+  if (parsed.data.offer === "continuous_monitor") {
+    return NextResponse.json(
+      {
+        error:
+          "Continuous Monitor is not accepting paid subscriptions yet. Start with the production-ready 90-Day Audit or contact support@billguarded.com for early access.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const offer = OFFERS.audit_90_day;
   const supabase = supabaseAdmin();
 
   const { data: audit, error: auditError } = await supabase
     .from("audit_requests")
     .select("id, company, email, status")
     .eq("id", parsed.data.requestId)
+    .eq("access_token_hash", intakeAccessTokenHash(parsed.data.accessToken))
     .maybeSingle();
 
   if (auditError || !audit || audit.status !== "intake") {
@@ -63,41 +76,30 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Automated BillGuarded audits currently require a CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
+          "BillGuarded requires one CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
       },
       { status: 409 },
     );
   }
 
   const priceId = stripePriceId(offer.id);
-  const origin = new URL(request.url).origin;
+  const origin = applicationOrigin(request.url);
   const metadata = {
     request_id: audit.id,
     offer: offer.id,
     company: audit.company.slice(0, 120),
   };
 
-  const common = {
+  const session = await stripe().checkout.sessions.create({
     customer_email: audit.email,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/start?offer=${offer.id}&cancelled=1`,
+    cancel_url: `${origin}/start?cancelled=1`,
     metadata,
     integration_identifier: INTEGRATION_IDENTIFIER,
-  };
-
-  const session =
-    offer.mode === "subscription"
-      ? await stripe().checkout.sessions.create({
-          ...common,
-          mode: "subscription",
-          subscription_data: { metadata },
-        })
-      : await stripe().checkout.sessions.create({
-          ...common,
-          mode: "payment",
-          customer_creation: "always",
-        });
+    mode: "payment",
+    customer_creation: "always",
+  });
 
   if (!session.url) {
     return NextResponse.json(
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("audit_requests")
     .update({
       selected_offer: offer.id,
@@ -114,7 +116,16 @@ export async function POST(request: Request) {
       status: "checkout_started",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", audit.id);
+    .eq("id", audit.id)
+    .eq("status", "intake");
+
+  if (updateError) {
+    console.error("checkout_audit_update_failed", updateError.code);
+    return NextResponse.json(
+      { error: "Checkout was created but the audit workspace could not be updated. Contact support before paying." },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ url: session.url });
 }
