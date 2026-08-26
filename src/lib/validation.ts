@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+const accessTokenSchema = z
+  .string()
+  .trim()
+  .min(43)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
 export const intakeSchema = z.object({
   company: z.string().trim().min(2).max(120),
   email: z.string().trim().toLowerCase().email().max(254),
@@ -9,6 +16,7 @@ export const intakeSchema = z.object({
 
 export const uploadRequestSchema = z.object({
   requestId: z.string().uuid(),
+  accessToken: accessTokenSchema,
   filename: z.string().trim().min(1).max(180),
   contentType: z.string().trim().min(1).max(120),
   size: z.number().int().positive().max(20 * 1024 * 1024),
@@ -24,17 +32,21 @@ export const confirmUploadSchema = uploadRequestSchema.omit({
 
 export const checkoutSchema = z.object({
   requestId: z.string().uuid(),
+  accessToken: accessTokenSchema,
   offer: z.enum(["audit_90_day", "continuous_monitor"]),
 });
 
 export const allowedDocumentTypes = new Set([
-  "application/pdf",
   "text/csv",
   "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "image/jpeg",
-  "image/png",
 ]);
+
+export function isSupportedCsvUpload(filename: string, contentType: string) {
+  return (
+    filename.trim().toLowerCase().endsWith(".csv") &&
+    allowedDocumentTypes.has(contentType.trim().toLowerCase())
+  );
+}
 
 export function safeFilename(filename: string) {
   const cleaned = filename
@@ -43,5 +55,5 @@ export function safeFilename(filename: string) {
     .replace(/-+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "");
 
-  return cleaned.slice(0, 120) || "document";
+  return cleaned.slice(0, 120) || "document.csv";
 }
