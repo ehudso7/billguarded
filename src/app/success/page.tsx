@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import AutoRefresh from "./auto-refresh";
 import {
   portalCookieName,
   verifyPortalCookie,
@@ -101,11 +102,14 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   const complete = runStatus === "complete";
   const needsReview = runStatus === "needs_review";
   const failed = runStatus === "failed";
-
   const icon = pending || processing ? "…" : failed || needsReview ? "!" : "✓";
+  const reportUrl = params.request
+    ? `/api/audit-report?request=${encodeURIComponent(params.request)}`
+    : null;
 
   return (
     <main className="center-page">
+      <AutoRefresh active={processing} />
       <section className="success-card">
         <div className="success-icon" aria-hidden="true">
           {icon}
@@ -140,7 +144,7 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
           {pending
             ? "BillGuarded will not provision paid access until Stripe reports the payment successful."
             : processing
-              ? "The deterministic engine is checking duplicate charges, unsupported fee codes, line arithmetic, and billed rates against the supplied rate card. Refresh this page in a moment."
+              ? "The deterministic engine is checking duplicate charges, unsupported fee codes, line arithmetic, and billed rates against the supplied rate card. This page updates automatically for about two minutes; you can also refresh it manually."
               : complete
                 ? `${findingCount} evidence-backed finding${findingCount === 1 ? "" : "s"} were generated from the structured files you supplied. The recovery total is conservatively de-duplicated by source row. Review each item against operational context before disputing a charge.`
                 : failed
@@ -197,18 +201,18 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
             >
               Contact support
             </a>
+          ) : complete && reportUrl ? (
+            <a className="button primary" href={reportUrl}>
+              Download findings CSV
+            </a>
           ) : (
             <Link className="button primary" href="/">
               Return home
             </Link>
           )}
-          {billingAccess ? (
-            <form action="/api/billing/portal" method="post">
-              <button className="button" type="submit">
-                Manage billing
-              </button>
-            </form>
-          ) : null}
+          <Link className="button" href="/">
+            Return home
+          </Link>
         </div>
       </section>
     </main>
