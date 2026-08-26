@@ -12,6 +12,7 @@ export const intakeSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   monthly3plSpend: z.coerce.number().int().min(0).max(100_000_000),
   invoiceCount: z.coerce.number().int().min(1).max(10_000),
+  termsAccepted: z.literal(true),
 });
 
 export const uploadRequestSchema = z.object({
