@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { intakeSchema } from "@/lib/validation";
 
 export const maxDuration = 60;
+const TERMS_VERSION = "2026-08-25";
 
 function intakeRateKey(request: Request) {
   const forwarded =
@@ -55,7 +56,10 @@ export async function POST(request: Request) {
   const parsed = intakeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Enter valid company and invoice details." },
+      {
+        error:
+          "Enter valid company and invoice details and accept the BillGuarded Terms and Privacy Notice.",
+      },
       { status: 400 },
     );
   }
@@ -100,6 +104,7 @@ export async function POST(request: Request) {
   const accessTokenHash = createHash("sha256")
     .update(accessToken, "utf8")
     .digest("hex");
+  const acceptedAt = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("audit_requests")
@@ -109,6 +114,8 @@ export async function POST(request: Request) {
       monthly_3pl_spend_cents: parsed.data.monthly3plSpend * 100,
       invoice_count_monthly: parsed.data.invoiceCount,
       access_token_hash: accessTokenHash,
+      terms_accepted_at: acceptedAt,
+      terms_version: TERMS_VERSION,
       status: "intake",
     })
     .select("id")

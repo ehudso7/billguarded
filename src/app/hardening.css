@@ -9,6 +9,35 @@
   line-height: 1.45;
 }
 
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.consent-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--accent-strong);
+}
+
+.consent-row a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .trust-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -124,7 +124,9 @@ export default function IntakeForm() {
 
     const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_TOTAL_BYTES) {
-      setError("The combined upload is larger than 50 MB. Split the audit into a smaller supported file set before paying.");
+      setError(
+        "The combined upload is larger than 50 MB. Split the audit into a smaller supported file set before paying.",
+      );
       return;
     }
 
@@ -142,6 +144,7 @@ export default function IntakeForm() {
             email: form.get("email"),
             monthly3plSpend: Number(form.get("monthly3plSpend")),
             invoiceCount: Number(form.get("invoiceCount")),
+            termsAccepted: form.get("termsAccepted") === "on",
           }),
         }),
       );
@@ -196,11 +199,23 @@ export default function IntakeForm() {
       <div className="form-grid">
         <div className="field full">
           <label htmlFor="company">Company</label>
-          <input id="company" name="company" required minLength={2} autoComplete="organization" />
+          <input
+            id="company"
+            name="company"
+            required
+            minLength={2}
+            autoComplete="organization"
+          />
         </div>
         <div className="field full">
           <label htmlFor="email">Work email</label>
-          <input id="email" name="email" type="email" required autoComplete="email" />
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+          />
         </div>
         <div className="field">
           <label htmlFor="monthly3plSpend">Approx. monthly 3PL spend ($)</label>
@@ -262,8 +277,25 @@ export default function IntakeForm() {
             />
           </div>
           <span className="field-help">
-            Best results include a reference/order ID, service code, quantity, unit rate, and line total. All selected files combined must be 50 MB or less.
+            Best results include a reference/order ID, service code, quantity,
+            unit rate, and line total. All selected files combined must be 50 MB
+            or less.
           </span>
+        </div>
+        <div className="field full">
+          <label className="consent-row" htmlFor="termsAccepted">
+            <input
+              id="termsAccepted"
+              name="termsAccepted"
+              type="checkbox"
+              required
+            />
+            <span>
+              I confirm I am authorized to upload these business records, agree
+              to the <a href="/terms">BillGuarded Terms</a>, and acknowledge the{" "}
+              <a href="/privacy">Privacy Notice</a>.
+            </span>
+          </label>
         </div>
       </div>
 
