@@ -44,6 +44,7 @@ const REFERENCE_ALIASES = [
   "invoice_line_id",
   "tracking_number",
 ];
+const STALE_PROCESSING_MS = 20 * 60 * 1000;
 
 export type AuditFindingInsert = {
   audit_run_id: string;
@@ -288,6 +289,92 @@ function deterministicInputError(message: string) {
   );
 }
 
+async function updateAuditRequest(
+  requestId: string,
+  values: Record<string, unknown>,
+) {
+  const { error } = await supabaseAdmin()
+    .from("audit_requests")
+    .update(values)
+    .eq("id", requestId);
+  if (error) throw error;
+}
+
+async function updateAuditRun(runId: string, values: Record<string, unknown>) {
+  const { error } = await supabaseAdmin()
+    .from("audit_runs")
+    .update(values)
+    .eq("id", runId);
+  if (error) throw error;
+}
+
+async function safelyRecordFailure(input: {
+  runId: string;
+  requestId: string;
+  status: "failed" | "needs_review";
+  errorCode: string;
+  message: string;
+}) {
+  const now = new Date().toISOString();
+  const { error: runError } = await supabaseAdmin()
+    .from("audit_runs")
+    .update({
+      status: input.status,
+      error_code: input.errorCode,
+      error_message: input.message,
+      completed_at: now,
+      updated_at: now,
+    })
+    .eq("id", input.runId);
+  if (runError) {
+    console.error("audit_failure_run_update_failed", input.runId, runError.code);
+  }
+
+  const { error: requestError } = await supabaseAdmin()
+    .from("audit_requests")
+    .update({ status: "paid", updated_at: now })
+    .eq("id", input.requestId);
+  if (requestError) {
+    console.error(
+      "audit_failure_request_update_failed",
+      input.requestId,
+      requestError.code,
+    );
+  }
+}
+
+async function recoverStaleRun(input: {
+  id: string;
+  started_at: string | null;
+  created_at: string;
+  requestId: string;
+}) {
+  const timestamp = Date.parse(input.started_at ?? input.created_at);
+  if (!Number.isFinite(timestamp) || Date.now() - timestamp < STALE_PROCESSING_MS) {
+    return false;
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin()
+    .from("audit_runs")
+    .update({
+      status: "failed",
+      error_code: "stale_processing_run",
+      error_message: "Previous audit worker did not reach a terminal state.",
+      completed_at: now,
+      updated_at: now,
+    })
+    .eq("id", input.id)
+    .eq("status", "processing");
+  if (error) throw error;
+
+  await updateAuditRequest(input.requestId, {
+    status: "paid",
+    updated_at: now,
+  });
+  return true;
+}
+
 export async function processAuditRequest(requestId: string) {
   const supabase = supabaseAdmin();
 
@@ -299,15 +386,26 @@ export async function processAuditRequest(requestId: string) {
   if (requestError) throw requestError;
   if (!request || !["paid", "processing"].includes(request.status)) return;
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("audit_runs")
-    .select("id,status")
+    .select("id,status,started_at,created_at")
     .eq("audit_request_id", requestId)
     .in("status", ["queued", "processing", "complete", "needs_review"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (existing) return;
+  if (existingError) throw existingError;
+
+  if (existing) {
+    if (existing.status !== "processing") return;
+    const recovered = await recoverStaleRun({
+      id: existing.id,
+      started_at: existing.started_at,
+      created_at: existing.created_at,
+      requestId,
+    });
+    if (!recovered) return;
+  }
 
   const { data: run, error: runError } = await supabase
     .from("audit_runs")
@@ -320,10 +418,10 @@ export async function processAuditRequest(requestId: string) {
     .single();
   if (runError) throw runError;
 
-  await supabase
-    .from("audit_requests")
-    .update({ status: "processing", updated_at: new Date().toISOString() })
-    .eq("id", requestId);
+  await updateAuditRequest(requestId, {
+    status: "processing",
+    updated_at: new Date().toISOString(),
+  });
 
   try {
     const { data: documents, error: documentsError } = await supabase
@@ -344,22 +442,20 @@ export async function processAuditRequest(requestId: string) {
     );
 
     if (!termsDocument || invoiceDocuments.length === 0) {
-      await supabase
-        .from("audit_runs")
-        .update({
-          status: "needs_review",
-          source_document_count: typedDocuments.length,
-          error_code: "structured_csv_required",
-          error_message:
-            "Deterministic v1 requires a CSV contract/rate card and at least one CSV invoice.",
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", run.id);
-      await supabase
-        .from("audit_requests")
-        .update({ status: "paid", updated_at: new Date().toISOString() })
-        .eq("id", requestId);
+      const now = new Date().toISOString();
+      await updateAuditRun(run.id, {
+        status: "needs_review",
+        source_document_count: typedDocuments.length,
+        error_code: "structured_csv_required",
+        error_message:
+          "Deterministic v1 requires a CSV contract/rate card and at least one CSV invoice.",
+        completed_at: now,
+        updated_at: now,
+      });
+      await updateAuditRequest(requestId, {
+        status: "paid",
+        updated_at: now,
+      });
       return;
     }
 
@@ -396,42 +492,33 @@ export async function processAuditRequest(requestId: string) {
     }
 
     const potentialRecoveryCents = conservativePotentialRecoveryCents(findings);
-    await supabase
-      .from("audit_runs")
-      .update({
-        status: "complete",
-        source_document_count: csvDocuments.length,
-        finding_count: findings.length,
-        potential_recovery_cents: potentialRecoveryCents,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", run.id);
-    await supabase
-      .from("audit_requests")
-      .update({ status: "complete", updated_at: new Date().toISOString() })
-      .eq("id", requestId);
+    const now = new Date().toISOString();
+    await updateAuditRun(run.id, {
+      status: "complete",
+      source_document_count: csvDocuments.length,
+      finding_count: findings.length,
+      potential_recovery_cents: potentialRecoveryCents,
+      completed_at: now,
+      updated_at: now,
+    });
+    await updateAuditRequest(requestId, {
+      status: "complete",
+      updated_at: now,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
     const inputFailure = deterministicInputError(message);
 
-    await supabase
-      .from("audit_runs")
-      .update({
-        status: inputFailure ? "needs_review" : "failed",
-        error_code: inputFailure
-          ? "structured_data_invalid"
-          : "audit_engine_failed",
-        error_message: message,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", run.id);
-    await supabase
-      .from("audit_requests")
-      .update({ status: "paid", updated_at: new Date().toISOString() })
-      .eq("id", requestId);
+    await safelyRecordFailure({
+      runId: run.id,
+      requestId,
+      status: inputFailure ? "needs_review" : "failed",
+      errorCode: inputFailure
+        ? "structured_data_invalid"
+        : "audit_engine_failed",
+      message,
+    });
 
     if (!inputFailure) throw error;
   }
