@@ -6,6 +6,9 @@ import {
 } from "@/lib/security/portal-cookie";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function spreadsheetSafe(value: string) {
   const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   return /^[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
@@ -36,8 +39,8 @@ function dollars(cents: number | null | undefined) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const requestId = url.searchParams.get("request");
-  if (!requestId) {
-    return NextResponse.json({ error: "request_required" }, { status: 400 });
+  if (!requestId || !UUID_PATTERN.test(requestId)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
   const cookieStore = await cookies();
@@ -56,7 +59,14 @@ export async function GET(request: Request) {
     .eq("stripe_customer_id", billingAccess.customerId)
     .maybeSingle();
 
-  if (auditError || !audit) {
+  if (auditError) {
+    console.error("audit_report_lookup_failed", auditError.code);
+    return NextResponse.json(
+      { error: "report_lookup_failed" },
+      { status: 500 },
+    );
+  }
+  if (!audit) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -69,14 +79,21 @@ export async function GET(request: Request) {
     .limit(1)
     .maybeSingle();
 
-  if (runError || !run) {
+  if (runError) {
+    console.error("audit_report_run_lookup_failed", runError.code);
+    return NextResponse.json(
+      { error: "report_lookup_failed" },
+      { status: 500 },
+    );
+  }
+  if (!run) {
     return NextResponse.json(
       { error: "report_not_ready" },
       { status: 409 },
     );
   }
 
-  const [{ data: findings, error: findingsError }, { data: documents }] =
+  const [{ data: findings, error: findingsError }, { data: documents, error: documentsError }] =
     await Promise.all([
       supabase
         .from("audit_findings")
@@ -91,7 +108,11 @@ export async function GET(request: Request) {
         .eq("audit_request_id", audit.id),
     ]);
 
-  if (findingsError) {
+  if (findingsError || documentsError) {
+    console.error(
+      "audit_report_generation_failed",
+      findingsError?.code ?? documentsError?.code,
+    );
     return NextResponse.json(
       { error: "report_generation_failed" },
       { status: 500 },
