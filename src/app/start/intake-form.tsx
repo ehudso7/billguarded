@@ -12,6 +12,7 @@ type CheckoutResponse = { url: string };
 
 const ACCEPT = ".csv,text/csv,application/vnd.ms-excel";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T & { error?: string };
@@ -113,10 +114,17 @@ export default function IntakeForm() {
       return;
     }
 
+    const selectedFiles = [contractFile, ...invoiceFiles];
     try {
-      [contractFile, ...invoiceFiles].forEach(validateCsvFile);
+      selectedFiles.forEach(validateCsvFile);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Use CSV files only.");
+      return;
+    }
+
+    const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      setError("The combined upload is larger than 50 MB. Split the audit into a smaller supported file set before paying.");
       return;
     }
 
@@ -158,7 +166,7 @@ export default function IntakeForm() {
         );
       }
 
-      setStatus("Opening secure Stripe Checkout…");
+      setStatus("Validating structured billing data before payment…");
       const checkout = await jsonOrThrow<CheckoutResponse>(
         await fetch("/api/stripe/checkout", {
           method: "POST",
@@ -244,15 +252,17 @@ export default function IntakeForm() {
               accept={ACCEPT}
               multiple
               required
-              onChange={(event) =>
-                setInvoiceFiles(
-                  Array.from(event.target.files ?? []).slice(0, 10),
-                )
-              }
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                if (files.length > 10) {
+                  setError("An audit can include at most 10 invoice CSV files.");
+                }
+                setInvoiceFiles(files.slice(0, 10));
+              }}
             />
           </div>
           <span className="field-help">
-            Best results include a reference/order ID, service code, quantity, unit rate, and line total.
+            Best results include a reference/order ID, service code, quantity, unit rate, and line total. All selected files combined must be 50 MB or less.
           </span>
         </div>
       </div>

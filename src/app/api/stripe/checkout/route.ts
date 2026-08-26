@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkoutSchema } from "@/lib/validation";
+import { preflightAuditDocuments } from "@/lib/audit-preflight";
 import { OFFERS } from "@/lib/offers";
 import { applicationOrigin } from "@/lib/origin";
 import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { stripePriceId } from "@/lib/stripe-prices";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { checkoutSchema } from "@/lib/validation";
 
 const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
 
@@ -60,24 +61,53 @@ export async function POST(request: Request) {
 
   const { data: documents, error: documentError } = await supabase
     .from("audit_documents")
-    .select("kind,content_type,original_filename")
+    .select(
+      "id,kind,content_type,original_filename,storage_path,byte_size",
+    )
     .eq("audit_request_id", audit.id)
     .eq("upload_status", "uploaded");
 
-  const csvDocuments = documents?.filter(isCsvDocument) ?? [];
+  if (documentError || !documents) {
+    return NextResponse.json(
+      {
+        error:
+          "BillGuarded could not validate the uploaded file set. No charge was created. Please retry or contact support@billguarded.com.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const csvDocuments = documents.filter(isCsvDocument);
+  if (csvDocuments.length !== documents.length) {
+    return NextResponse.json(
+      {
+        error:
+          "BillGuarded currently accepts CSV audit inputs only. No charge was created.",
+      },
+      { status: 409 },
+    );
+  }
+
   const hasCsvTerms = csvDocuments.some(
     (document) => document.kind === "contract" || document.kind === "rate_card",
   );
   const hasCsvInvoice = csvDocuments.some(
     (document) => document.kind === "invoice",
   );
-
-  if (documentError || !hasCsvTerms || !hasCsvInvoice) {
+  if (!hasCsvTerms || !hasCsvInvoice) {
     return NextResponse.json(
       {
         error:
           "BillGuarded requires one CSV contract/rate card and at least one CSV invoice before payment. No charge was created.",
       },
+      { status: 409 },
+    );
+  }
+
+  const preflight = await preflightAuditDocuments(csvDocuments);
+  if (!preflight.ok) {
+    return NextResponse.json(
+      { error: preflight.message },
       { status: 409 },
     );
   }
@@ -90,20 +120,35 @@ export async function POST(request: Request) {
     company: audit.company.slice(0, 120),
   };
 
-  const session = await stripe().checkout.sessions.create({
-    customer_email: audit.email,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/start?cancelled=1`,
-    metadata,
-    integration_identifier: INTEGRATION_IDENTIFIER,
-    mode: "payment",
-    customer_creation: "always",
-  });
+  let session;
+  try {
+    session = await stripe().checkout.sessions.create({
+      customer_email: audit.email,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/start?cancelled=1`,
+      metadata,
+      integration_identifier: INTEGRATION_IDENTIFIER,
+      mode: "payment",
+      customer_creation: "always",
+    });
+  } catch (error) {
+    console.error(
+      "checkout_session_create_failed",
+      error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
+    );
+    return NextResponse.json(
+      {
+        error:
+          "Secure checkout could not be opened. No charge was created. Please try again shortly.",
+      },
+      { status: 502 },
+    );
+  }
 
   if (!session.url) {
     return NextResponse.json(
-      { error: "Stripe did not return a checkout URL." },
+      { error: "Stripe did not return a checkout URL. No charge was created." },
       { status: 502 },
     );
   }
@@ -122,7 +167,10 @@ export async function POST(request: Request) {
   if (updateError) {
     console.error("checkout_audit_update_failed", updateError.code);
     return NextResponse.json(
-      { error: "Checkout was created but the audit workspace could not be updated. Contact support before paying." },
+      {
+        error:
+          "Checkout was prepared but the audit workspace could not be locked for payment. Do not pay from an old tab; contact support@billguarded.com.",
+      },
       { status: 500 },
     );
   }

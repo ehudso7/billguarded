@@ -23,13 +23,13 @@ export const OFFERS: Record<OfferId, Offer> = {
     priceLabel: "$1,500",
     cadence: "one time",
     description:
-      "Reconcile up to 90 days of 3PL invoices against your contract and rate card, then package evidence-backed discrepancies for review.",
+      "Reconcile up to 90 days of supported 3PL invoice CSVs against your supplied rate card, then review evidence-linked potential discrepancies.",
     features: [
       "Contract and rate-card reconciliation",
       "Invoice-line discrepancy analysis",
       "Duplicate and unsupported charge checks",
       "Evidence-linked findings",
-      "Dispute-ready findings package",
+      "Downloadable findings report",
     ],
     mode: "payment",
     priceEnv: "STRIPE_PRICE_AUDIT_90_DAY",
@@ -42,13 +42,13 @@ export const OFFERS: Record<OfferId, Offer> = {
     priceLabel: "$599",
     cadence: "per month",
     description:
-      "Continuously reconcile new fulfillment invoices against the commercial terms you supplied and surface exceptions for review.",
+      "Planned recurring reconciliation of new fulfillment invoices against supplied commercial terms. Paid enrollment remains disabled until recurring ingestion is production-ready.",
     features: [
       "Ongoing invoice reconciliation",
       "Recurring discrepancy detection",
-      "Evidence-linked exception log",
-      "Billing history in Stripe",
-      "Self-service subscription management",
+      "Evidence-linked exception history",
+      "Planned billing self-service",
+      "Controlled early access before general availability",
     ],
     mode: "subscription",
     priceEnv: "STRIPE_PRICE_CONTINUOUS_MONITOR",
