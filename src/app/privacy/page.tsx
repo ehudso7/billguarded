@@ -26,8 +26,9 @@ export default function PrivacyPage() {
         <p>
           BillGuarded processes the company and work-email information you
           submit, the billing documents you upload, audit results generated
-          from those documents, and billing records needed to provide the
-          service. We also receive standard operational data needed to protect
+          from those documents, billing records needed to provide the service,
+          and a record of when you accepted the current Terms and Privacy
+          Notice. We also receive standard operational data needed to protect
           and run the service, such as request metadata and delivery events.
         </p>
 
@@ -35,9 +36,10 @@ export default function PrivacyPage() {
         <p>
           We use submitted information to create your audit workspace, validate
           uploads, reconcile supported billing data, present findings, process
-          payments, provide support, prevent abuse, and operate and improve the
-          service. We do not use a customer&apos;s uploaded invoices or rate
-          cards to make unsupported accusations or guarantee a recovery.
+          payments, provide support, document your service authorization,
+          prevent abuse, and operate and improve the service. We do not use a
+          customer&apos;s uploaded invoices or rate cards to make unsupported
+          accusations or guarantee a recovery.
         </p>
 
         <h2>Service providers</h2>
@@ -56,6 +58,8 @@ export default function PrivacyPage() {
           access. We retain information for as long as reasonably necessary to
           provide the service, maintain billing and audit records, resolve
           disputes, protect the service, and meet applicable legal obligations.
+          Abandoned pre-checkout workspaces may be removed automatically after
+          a short retention window.
         </p>
 
         <h2>Your choices</h2>
