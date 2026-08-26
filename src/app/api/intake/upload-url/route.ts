@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  allowedDocumentTypes,
+  isSupportedCsvUpload,
   safeFilename,
   uploadRequestSchema,
 } from "@/lib/validation";
@@ -21,10 +22,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const { requestId, filename, contentType, size, kind } = parsed.data;
-  if (!allowedDocumentTypes.has(contentType)) {
+  const { requestId, accessToken, filename, contentType, size, kind } = parsed.data;
+  if (!isSupportedCsvUpload(filename, contentType)) {
     return NextResponse.json(
-      { error: "Unsupported file type." },
+      { error: "BillGuarded currently accepts CSV files only." },
       { status: 415 },
     );
   }
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     .from("audit_requests")
     .select("id, status")
     .eq("id", requestId)
+    .eq("access_token_hash", intakeAccessTokenHash(accessToken))
     .maybeSingle();
 
   if (auditError || !audit || audit.status !== "intake") {
