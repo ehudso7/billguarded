@@ -1,15 +1,18 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { processAuditRequest } from "@/lib/audit-engine";
+import { processAuditRequestWithRetry } from "@/lib/audit-processing";
 import { applicationOrigin } from "@/lib/origin";
 import { isOfferId } from "@/lib/offers";
-import { stripe } from "@/lib/stripe";
-import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   createPortalCookie,
   portalCookieName,
 } from "@/lib/security/portal-cookie";
+import { stripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const maxDuration = 300;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function customerIdFromSession(
   customer: string | { id: string } | null,
@@ -102,14 +105,19 @@ async function startPaidAudit(requestId: string) {
   for (const delay of delays) {
     if (delay > 0) await sleep(delay);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("audit_requests")
       .select("status")
       .eq("id", requestId)
       .maybeSingle();
 
+    if (error) {
+      console.warn("billguarded_audit_status_poll_failed", requestId, error.code);
+      continue;
+    }
+
     if (data?.status === "paid" || data?.status === "processing") {
-      await processAuditRequest(requestId);
+      await processAuditRequestWithRetry(requestId);
       return;
     }
 
@@ -126,10 +134,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/start?error=checkout", origin));
   }
 
-  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  let session;
+  try {
+    session = await stripe().checkout.sessions.retrieve(sessionId);
+  } catch {
+    return NextResponse.redirect(
+      new URL("/start?error=checkout_lookup", origin),
+    );
+  }
+
   if (session.status !== "complete") {
     return NextResponse.redirect(
       new URL("/start?error=checkout_not_complete", origin),
+    );
+  }
+
+  const requestId = session.metadata?.request_id;
+  const offer = session.metadata?.offer;
+  if (!requestId || !UUID_PATTERN.test(requestId) || !isOfferId(offer)) {
+    return NextResponse.redirect(
+      new URL("/start?error=checkout_metadata", origin),
     );
   }
 
@@ -145,14 +169,12 @@ export async function GET(request: NextRequest) {
     session.payment_status === "no_payment_required";
   const cookie = createPortalCookie(customerId);
   const target = new URL("/success", origin);
-  const requestId = session.metadata?.request_id;
-  const offer = session.metadata?.offer;
 
-  if (requestId) target.searchParams.set("request", requestId);
-  if (offer) target.searchParams.set("offer", offer);
+  target.searchParams.set("request", requestId);
+  target.searchParams.set("offer", offer);
   if (!paid) target.searchParams.set("pending", "1");
 
-  if (paid && requestId) {
+  if (paid) {
     if (!session.livemode) {
       await promotePaidSandboxCheckout({
         requestId,

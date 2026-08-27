@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { after, NextResponse } from "next/server";
-import { processAuditRequest } from "@/lib/audit-engine";
+import { processAuditRequestWithRetry } from "@/lib/audit-processing";
 import {
   isOfferId,
   type OfferId,
@@ -250,7 +250,7 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
 function scheduleAudit(requestId: string) {
   after(async () => {
     try {
-      await processAuditRequest(requestId);
+      await processAuditRequestWithRetry(requestId);
     } catch (error) {
       console.error("billguarded_audit_processing_failed", requestId, error);
     }
