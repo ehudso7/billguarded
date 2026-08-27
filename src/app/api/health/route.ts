@@ -3,6 +3,10 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
+function deployedCommit() {
+  return process.env.VERCEL_GIT_COMMIT_SHA ?? null;
+}
+
 export async function GET() {
   try {
     const { error } = await supabaseAdmin()
@@ -17,6 +21,7 @@ export async function GET() {
         ok: true,
         service: "billguarded",
         database: "ok",
+        commit: deployedCommit(),
       },
       {
         headers: { "Cache-Control": "no-store" },
@@ -28,6 +33,7 @@ export async function GET() {
         ok: false,
         service: "billguarded",
         database: "unavailable",
+        commit: deployedCommit(),
       },
       {
         status: 503,
