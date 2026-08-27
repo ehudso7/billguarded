@@ -134,3 +134,37 @@ jobs:
             echo "Invalid checkout returned HTTP $checkout_code instead of 400"
             exit 1
           }
+
+      - name: Verify recovery links fail closed
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers_file="$(mktemp)"
+          code="$(curl --silent --show-error --max-time 20 \
+            --dump-header "$headers_file" --output /dev/null \
+            --write-out '%{http_code}' "$BASE_URL/recover" || true)"
+
+          [[ "$code" == "303" ]] || {
+            echo "Recovery route without a session returned HTTP $code instead of 303"
+            cat "$headers_file" || true
+            exit 1
+          }
+
+          python3 - "$headers_file" <<'PY'
+          import pathlib
+          import sys
+
+          lines = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+          headers = {}
+          for line in lines:
+              if ":" not in line:
+                  continue
+              key, value = line.split(":", 1)
+              headers[key.strip().lower()] = value.strip()
+
+          location = headers.get("location", "")
+          assert "/start?error=recovery_link_invalid" in location, headers
+          assert headers.get("cache-control", "").lower() == "private, no-store", headers
+          assert headers.get("referrer-policy", "").lower() == "no-referrer", headers
+          PY

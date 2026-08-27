@@ -71,6 +71,15 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 - Continuous Monitor Checkout is rejected until the recurring product is production-ready.
 - Only the Full 90-Day Audit product and its canonical $1,500 Price remain active in the live Stripe catalog.
 
+### Customer report access and recovery
+
+- A successful Checkout issues an HMAC-signed, HttpOnly access cookie scoped to BillGuarded.
+- The completed audit page and downloadable findings CSV require that cookie and verify the audit belongs to the same Stripe customer.
+- Customers who change devices or lose the cookie can use a private `/recover?session_id=...` link generated from their exact paid Stripe Checkout Session.
+- The recovery route re-verifies the Checkout with Stripe, requires a completed paid 90-Day Audit, and matches the request ID, Checkout Session ID, and Stripe customer ID before issuing a fresh access cookie.
+- Recovery responses are `no-store` and use a `no-referrer` policy. The recovery URL is a bearer credential and must never be published, logged in analytics, or forwarded to another person.
+- Customer-delivery state is tracked separately from audit completion so a failed notification can be retried without reprocessing or recharging the audit.
+
 ### Data access
 
 - Audit, finding, billing, and Stripe-event tables have RLS enabled.
@@ -98,6 +107,7 @@ The `Production Smoke` workflow runs after each `main` deployment and daily. It 
 - public pages, legal pages, robots, and sitemap
 - security headers
 - fail-closed behavior for unsigned webhooks and malformed intake/Checkout requests
+- fail-closed recovery behavior for missing/invalid recovery credentials
 
 ## Customer-facing trust pages
 
