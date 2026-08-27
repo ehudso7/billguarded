@@ -49,3 +49,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
           SUPABASE_SECRET_KEY: sb_secret_placeholder
+
+  verify-live-stripe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Use Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Verify live Stripe source contract
+        run: node scripts/verify-live-stripe-contract.mjs
