@@ -7,6 +7,7 @@ import {
   type CsvRow,
 } from "@/lib/audit-csv";
 import { conservativePotentialRecoveryCents } from "@/lib/audit-math";
+import { shouldRecoverProcessingRun } from "@/lib/audit-recovery";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const SERVICE_ALIASES = [
@@ -44,7 +45,6 @@ const REFERENCE_ALIASES = [
   "invoice_line_id",
   "tracking_number",
 ];
-const STALE_PROCESSING_MS = 20 * 60 * 1000;
 
 export type AuditFindingInsert = {
   audit_run_id: string;
@@ -316,6 +316,19 @@ async function safelyRecordFailure(input: {
   message: string;
 }) {
   const now = new Date().toISOString();
+
+  const { error: cleanupError } = await supabaseAdmin()
+    .from("audit_findings")
+    .delete()
+    .eq("audit_run_id", input.runId);
+  if (cleanupError) {
+    console.error(
+      "audit_failure_findings_cleanup_failed",
+      input.runId,
+      cleanupError.code,
+    );
+  }
+
   const { error: runError } = await supabaseAdmin()
     .from("audit_runs")
     .update({
@@ -348,14 +361,20 @@ async function recoverStaleRun(input: {
   started_at: string | null;
   created_at: string;
   requestId: string;
+  requestStatus: string;
 }) {
-  const timestamp = Date.parse(input.started_at ?? input.created_at);
-  if (!Number.isFinite(timestamp) || Date.now() - timestamp < STALE_PROCESSING_MS) {
+  if (
+    !shouldRecoverProcessingRun({
+      startedAt: input.started_at,
+      createdAt: input.created_at,
+      requestStatus: input.requestStatus,
+    })
+  ) {
     return false;
   }
 
   const now = new Date().toISOString();
-  const { error } = await supabaseAdmin()
+  const { data: recovered, error } = await supabaseAdmin()
     .from("audit_runs")
     .update({
       status: "failed",
@@ -365,8 +384,11 @@ async function recoverStaleRun(input: {
       updated_at: now,
     })
     .eq("id", input.id)
-    .eq("status", "processing");
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!recovered) return false;
 
   await updateAuditRequest(input.requestId, {
     status: "paid",
@@ -403,6 +425,7 @@ export async function processAuditRequest(requestId: string) {
       started_at: existing.started_at,
       created_at: existing.created_at,
       requestId,
+      requestStatus: request.status,
     });
     if (!recovered) return;
   }
