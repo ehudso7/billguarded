@@ -20,6 +20,40 @@ function isCsvDocument(document: {
   );
 }
 
+function checkoutIdempotencyKey(auditId: string) {
+  return `billguarded:audit:${auditId}:v1`;
+}
+
+async function recoverExistingCheckout(input: {
+  auditId: string;
+  sessionId: string;
+  requestUrl: string;
+}) {
+  try {
+    const session = await stripe().checkout.sessions.retrieve(input.sessionId);
+    if (session.metadata?.request_id !== input.auditId) return null;
+
+    if (session.status === "open" && session.url) {
+      return session.url;
+    }
+
+    const paid =
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required";
+    if (session.status === "complete" && paid) {
+      const origin = applicationOrigin(input.requestUrl);
+      return `${origin}/checkout/complete?session_id=${encodeURIComponent(session.id)}`;
+    }
+  } catch (error) {
+    console.error(
+      "checkout_session_recovery_failed",
+      error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
+    );
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(
     await request.json().catch(() => null),
@@ -47,15 +81,48 @@ export async function POST(request: Request) {
 
   const { data: audit, error: auditError } = await supabase
     .from("audit_requests")
-    .select("id, company, email, status")
+    .select("id, company, email, status, stripe_checkout_session_id")
     .eq("id", parsed.data.requestId)
     .eq("access_token_hash", intakeAccessTokenHash(parsed.data.accessToken))
     .maybeSingle();
 
-  if (auditError || !audit || audit.status !== "intake") {
+  if (auditError || !audit) {
     return NextResponse.json(
       { error: "Audit request is not ready for checkout." },
       { status: 404 },
+    );
+  }
+
+  if (audit.status === "checkout_started" && audit.stripe_checkout_session_id) {
+    const existingUrl = await recoverExistingCheckout({
+      auditId: audit.id,
+      sessionId: audit.stripe_checkout_session_id,
+      requestUrl: request.url,
+    });
+
+    if (existingUrl) {
+      return NextResponse.json({ url: existingUrl, reused: true });
+    }
+
+    await supabase
+      .from("audit_requests")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("id", audit.id)
+      .eq("status", "checkout_started");
+
+    return NextResponse.json(
+      {
+        error:
+          "The previous Checkout Session is no longer usable and no payment was confirmed. Start a new audit workspace or contact support@billguarded.com.",
+      },
+      { status: 409 },
+    );
+  }
+
+  if (audit.status !== "intake") {
+    return NextResponse.json(
+      { error: "Audit request is not ready for checkout." },
+      { status: 409 },
     );
   }
 
@@ -122,16 +189,19 @@ export async function POST(request: Request) {
 
   let session;
   try {
-    session = await stripe().checkout.sessions.create({
-      customer_email: audit.email,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/start?cancelled=1`,
-      metadata,
-      integration_identifier: INTEGRATION_IDENTIFIER,
-      mode: "payment",
-      customer_creation: "always",
-    });
+    session = await stripe().checkout.sessions.create(
+      {
+        customer_email: audit.email,
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/start?cancelled=1`,
+        metadata,
+        integration_identifier: INTEGRATION_IDENTIFIER,
+        mode: "payment",
+        customer_creation: "always",
+      },
+      { idempotencyKey: checkoutIdempotencyKey(audit.id) },
+    );
   } catch (error) {
     console.error(
       "checkout_session_create_failed",
@@ -153,7 +223,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error: updateError } = await supabase
+  const { data: lockedAudit, error: updateError } = await supabase
     .from("audit_requests")
     .update({
       selected_offer: offer.id,
@@ -162,16 +232,43 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", audit.id)
-    .eq("status", "intake");
+    .eq("status", "intake")
+    .select("id, status, stripe_checkout_session_id")
+    .maybeSingle();
 
   if (updateError) {
     console.error("checkout_audit_update_failed", updateError.code);
     return NextResponse.json(
       {
         error:
-          "Checkout was prepared but the audit workspace could not be locked for payment. Do not pay from an old tab; contact support@billguarded.com.",
+          "Checkout was prepared but the audit workspace could not be locked for payment. No Checkout URL was released; retrying is safe.",
       },
-      { status: 500 },
+      { status: 503 },
+    );
+  }
+
+  if (!lockedAudit) {
+    const { data: currentAudit, error: currentError } = await supabase
+      .from("audit_requests")
+      .select("status, stripe_checkout_session_id")
+      .eq("id", audit.id)
+      .maybeSingle();
+
+    if (
+      !currentError &&
+      currentAudit?.status === "checkout_started" &&
+      currentAudit.stripe_checkout_session_id === session.id
+    ) {
+      return NextResponse.json({ url: session.url, reused: true });
+    }
+
+    console.warn("checkout_audit_lock_race", audit.id);
+    return NextResponse.json(
+      {
+        error:
+          "Another checkout attempt already changed this audit. No additional Checkout Session was released. Refresh or contact support@billguarded.com.",
+      },
+      { status: 409 },
     );
   }
 
