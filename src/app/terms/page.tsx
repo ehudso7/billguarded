@@ -20,7 +20,7 @@ export default function TermsPage() {
       <article className="legal-card">
         <span className="eyebrow">Terms</span>
         <h1>BillGuarded Terms of Service</h1>
-        <p>Last updated: August 25, 2026.</p>
+        <p>Last updated: August 27, 2026.</p>
 
         <h2>The service</h2>
         <p>
@@ -49,10 +49,14 @@ export default function TermsPage() {
 
         <h2>Supported production inputs</h2>
         <p>
-          The current production audit requires structured CSV inputs. The
-          checkout flow is designed to stop before payment if the required
-          supported files are not present. Other formats are not represented as
-          automatically supported unless BillGuarded explicitly says otherwise.
+          The current production audit requires structured CSV inputs and all
+          monetary amounts submitted for analysis must be denominated in U.S.
+          dollars (USD). If an uploaded file contains a currency field, a
+          declared non-USD currency is rejected before payment. When a file
+          contains no currency field, your acceptance at intake confirms that
+          the submitted monetary amounts are USD. Other formats or currencies
+          are not represented as automatically supported unless BillGuarded
+          explicitly says otherwise.
         </p>
 
         <h2>Payments</h2>
