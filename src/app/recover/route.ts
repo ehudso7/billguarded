@@ -14,10 +14,16 @@ function customerIdFromSession(
   return typeof customer === "string" ? customer : customer.id;
 }
 
+function protectRecoveryResponse(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
 function recoveryError(origin: string, code: string) {
   const target = new URL("/start", origin);
   target.searchParams.set("error", code);
-  return NextResponse.redirect(target, 303);
+  return protectRecoveryResponse(NextResponse.redirect(target, 303));
 }
 
 export async function GET(request: NextRequest) {
@@ -71,8 +77,6 @@ export async function GET(request: NextRequest) {
     path: "/",
     maxAge: cookie.maxAge,
   });
-  response.headers.set("Cache-Control", "private, no-store");
-  response.headers.set("Referrer-Policy", "no-referrer");
 
-  return response;
+  return protectRecoveryResponse(response);
 }
