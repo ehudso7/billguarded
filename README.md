@@ -30,7 +30,7 @@ Findings require operational review and do not guarantee refunds, credits, or re
 
 ## Production binding
 
-- Canonical site: `https://www.billguarded.com`
+- Canonical site: `https://billguarded.com`
 - GitHub: `ehudso7/billguarded`
 - Vercel project: `everton-hudsons-projects/billguarded`
 - Vercel project ID: `prj_uFLTZhEoI8rkgGtYPKn3K5wRrzuI`
@@ -47,7 +47,7 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 3. Ensure the BillGuarded Supabase variables are available locally.
 4. Apply the migrations in `supabase/migrations/` in version order.
 5. Store the Stripe webhook signing secret in Supabase Vault under the existing compatibility secret name used by production; never commit or log it.
-6. Configure the Stripe webhook endpoint as `/api/stripe/webhook` and subscribe it to the required Checkout, subscription, and invoice events documented in the webhook handler.
+6. Configure the Stripe webhook endpoint as `https://billguarded.com/api/stripe/webhook` and subscribe it to the required Checkout, subscription, and invoice events documented in the webhook handler.
 7. Run `npm ci`, then `npm run check` before deployment.
 
 ## Security model
@@ -67,7 +67,7 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 
 - Production payment state is synchronized from signature-verified Stripe webhook events.
 - Webhook event IDs are stored for idempotency.
-- Production Checkout and post-payment redirects are pinned to `https://www.billguarded.com`.
+- Production Checkout and post-payment redirects are pinned to `https://billguarded.com`.
 - Continuous Monitor Checkout is rejected until the recurring product is production-ready.
 - Only the Full 90-Day Audit product and its canonical $1,500 Price remain active in the live Stripe catalog.
 
