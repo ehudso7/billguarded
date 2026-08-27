@@ -17,8 +17,12 @@ export default function RecoveryClient() {
     window.history.replaceState(null, "", "/recover");
 
     if (!sessionId) {
-      setMessage("This recovery link is incomplete. Contact support@billguarded.com.");
-      return;
+      const timer = window.setTimeout(() => {
+        setMessage(
+          "This recovery link is incomplete. Contact support@billguarded.com.",
+        );
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
     void (async () => {
