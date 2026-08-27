@@ -20,7 +20,7 @@ export default function SecurityPage() {
       <article className="legal-card">
         <span className="eyebrow">Security</span>
         <h1>How BillGuarded protects audit data</h1>
-        <p>Last updated: August 25, 2026.</p>
+        <p>Last updated: August 27, 2026.</p>
 
         <h2>Private storage</h2>
         <p>
@@ -52,11 +52,23 @@ export default function SecurityPage() {
           webhook event IDs are recorded so processing is idempotent.
         </p>
 
+        <h2>Private report recovery</h2>
+        <p>
+          Completed audit access is tied to the Stripe customer that paid for
+          the audit. If a customer changes devices or loses the original browser
+          cookie, a private recovery link can re-establish access only after
+          BillGuarded re-verifies the exact completed paid Stripe Checkout and
+          matches its audit request, Checkout Session, and customer records.
+          Recovery links are bearer credentials: keep them private and do not
+          forward or publish them.
+        </p>
+
         <h2>Abuse and browser controls</h2>
         <p>
           Intake creation is rate-limited, supported file types are checked
           before signed upload access is created, production redirect origins
-          are pinned to the BillGuarded domain, and the application sends
+          are pinned to the BillGuarded domain, recovery responses are not
+          cacheable and suppress referrer leakage, and the application sends
           restrictive browser security headers.
         </p>
 
@@ -66,8 +78,8 @@ export default function SecurityPage() {
           <a href="mailto:support@billguarded.com?subject=Security%20report">
             support@billguarded.com
           </a>
-          . Please do not include customer documents or secrets in an initial
-          report.
+          . Please do not include customer documents, recovery links, or secrets
+          in an initial report.
         </p>
       </article>
     </main>
