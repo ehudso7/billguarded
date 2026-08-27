@@ -24,9 +24,11 @@ jobs:
     timeout-minutes: 12
     env:
       BASE_URL: https://billguarded.com
+      EXPECTED_SHA: ${{ github.sha }}
+      REQUIRE_EXACT_SHA: ${{ github.event_name != 'pull_request' }}
 
     steps:
-      - name: Wait for healthy production deployment
+      - name: Wait for exact healthy production deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -37,23 +39,30 @@ jobs:
               --output "$body_file" --write-out '%{http_code}' \
               "$BASE_URL/api/health" || true)"
 
-            if [[ "$code" == "200" ]] && python3 - "$body_file" <<'PY'
+            if [[ "$code" == "200" ]] && python3 - "$body_file" "$EXPECTED_SHA" "$REQUIRE_EXACT_SHA" <<'PY'
           import json
           import pathlib
           import sys
 
           body = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          expected_sha = sys.argv[2]
+          require_exact_sha = sys.argv[3].lower() == "true"
           data = json.loads(body)
           assert data.get("ok") is True, data
           assert data.get("service") == "billguarded", data
           assert data.get("database") == "ok", data
+          if require_exact_sha:
+              assert data.get("commit") == expected_sha, {
+                  "expected_commit": expected_sha,
+                  "deployed_commit": data.get("commit"),
+              }
           PY
             then
-              echo "Production health passed on attempt $attempt."
+              echo "Production deployment passed on attempt $attempt."
               exit 0
             fi
 
-            echo "Health attempt $attempt failed with HTTP $code."
+            echo "Production deployment is not ready on attempt $attempt (HTTP $code)."
             if [[ "$attempt" == "30" ]]; then
               echo "Last health response:"
               cat "$body_file" || true
