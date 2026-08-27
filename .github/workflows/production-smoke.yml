@@ -1,6 +1,9 @@
 name: Production Smoke
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/production-smoke.yml
   push:
     branches:
       - main
