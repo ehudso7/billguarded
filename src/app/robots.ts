@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: ["/", "/privacy", "/terms", "/security"],
       disallow: ["/api/", "/checkout/", "/success", "/start"],
     },
-    sitemap: "https://www.billguarded.com/sitemap.xml",
+    sitemap: "https://billguarded.com/sitemap.xml",
   };
 }
