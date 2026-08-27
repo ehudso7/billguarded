@@ -14,7 +14,7 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.billguarded.com"),
+  metadataBase: new URL("https://billguarded.com"),
   title: "BillGuarded — Find the charges your 3PL should not have billed",
   description:
     "Evidence-backed 3PL invoice reconciliation for ecommerce operators.",
