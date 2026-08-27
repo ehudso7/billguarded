@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      BASE_URL: https://www.billguarded.com
+      BASE_URL: https://billguarded.com
 
     steps:
       - name: Wait for healthy production deployment
