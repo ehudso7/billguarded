@@ -6,6 +6,7 @@ import {
   parseNumber,
   type CsvRow,
 } from "@/lib/audit-csv";
+import { isSupportedDeclaredCurrency } from "@/lib/audit-currency";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const SERVICE_ALIASES = [
@@ -33,6 +34,12 @@ const AMOUNT_ALIASES = [
   "extended_amount",
   "charge_amount",
   "billed_amount",
+];
+const CURRENCY_ALIASES = [
+  "currency",
+  "currency_code",
+  "billing_currency",
+  "invoice_currency",
 ];
 
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
@@ -66,12 +73,25 @@ function quantity(row: CsvRow) {
   return parseNumber(firstValue(row, QUANTITY_ALIASES));
 }
 
+function hasUnsupportedDeclaredCurrency(rows: CsvRow[]) {
+  return rows.some((row) =>
+    !isSupportedDeclaredCurrency(firstValue(row, CURRENCY_ALIASES)),
+  );
+}
+
 async function parsedRows(document: PreflightDocument) {
   const { data, error } = await supabaseAdmin().storage
     .from("audit-documents")
     .download(document.storage_path);
   if (error) throw error;
   return parseCsv(await data.text());
+}
+
+function usdScopeFailure(filename: string): AuditPreflightResult {
+  return {
+    ok: false,
+    message: `${filename} declares a non-USD currency. BillGuarded production audits currently support USD monetary amounts only. No charge was created.`,
+  };
 }
 
 export async function preflightAuditDocuments(
@@ -106,6 +126,10 @@ export async function preflightAuditDocuments(
 
   try {
     const termsRows = await parsedRows(termsDocument);
+    if (hasUnsupportedDeclaredCurrency(termsRows)) {
+      return usdScopeFailure(termsDocument.original_filename);
+    }
+
     const hasRecognizedRate = termsRows.some((row) => {
       const code = serviceCode(row);
       const rate = unitRate(row);
@@ -122,6 +146,10 @@ export async function preflightAuditDocuments(
 
     for (const invoice of invoiceDocuments) {
       const rows = await parsedRows(invoice);
+      if (hasUnsupportedDeclaredCurrency(rows)) {
+        return usdScopeFailure(invoice.original_filename);
+      }
+
       const hasUsableBillingRow = rows.some((row) => {
         if (!serviceCode(row)) return false;
         return amount(row) !== null || unitRate(row) !== null || quantity(row) !== null;
