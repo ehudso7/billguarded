@@ -16,14 +16,17 @@ export async function withRetry<T>(
     throw new Error("retry_schedule_required");
   }
 
+  for (const delay of options.delaysMs) {
+    if (!Number.isFinite(delay) || delay < 0) {
+      throw new Error("retry_delay_invalid");
+    }
+  }
+
   const sleep = options.sleep ?? defaultSleep;
   let lastError: unknown;
 
   for (let index = 0; index < options.delaysMs.length; index += 1) {
     const delay = options.delaysMs[index];
-    if (!Number.isFinite(delay) || delay < 0) {
-      throw new Error("retry_delay_invalid");
-    }
     if (delay > 0) await sleep(delay);
 
     try {
