@@ -13,7 +13,7 @@ BillGuarded handles commercially sensitive contracts, rate cards, invoices, audi
 - Record Stripe event IDs for idempotent webhook processing.
 - Tables in the exposed `public` schema have RLS enabled and no direct `anon` or `authenticated` table grants in the server-only model.
 - Intake creation is database-rate-limited.
-- Production Checkout, completion, and Customer Portal return origins are pinned to `https://www.billguarded.com`.
+- Production Checkout, completion, and future billing return origins are pinned to `https://billguarded.com`.
 - Rotate any secret immediately if it is pasted into chat, an issue, a commit, a build log, or another non-secret channel.
 
 ## Reporting vulnerabilities
