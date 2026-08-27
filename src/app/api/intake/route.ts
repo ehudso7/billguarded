@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { intakeSchema } from "@/lib/validation";
 
 export const maxDuration = 60;
-const TERMS_VERSION = "2026-08-25";
+const TERMS_VERSION = "2026-08-27";
 
 function intakeRateKey(request: Request) {
   const forwarded =
