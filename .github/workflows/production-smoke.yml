@@ -141,17 +141,14 @@ jobs:
         run: |
           set -euo pipefail
           headers_file="$(mktemp)"
-          code="$(curl --silent --show-error --max-time 20 \
-            --dump-header "$headers_file" --output /dev/null \
-            --write-out '%{http_code}' "$BASE_URL/recover" || true)"
 
-          [[ "$code" == "303" ]] || {
-            echo "Recovery route without a session returned HTTP $code instead of 303"
-            cat "$headers_file" || true
-            exit 1
-          }
+          for attempt in $(seq 1 30); do
+            : > "$headers_file"
+            code="$(curl --silent --show-error --max-time 20 \
+              --dump-header "$headers_file" --output /dev/null \
+              --write-out '%{http_code}' "$BASE_URL/recover" || true)"
 
-          python3 - "$headers_file" <<'PY'
+            if [[ "$code" == "303" ]] && python3 - "$headers_file" <<'PY'
           import pathlib
           import sys
 
@@ -168,3 +165,16 @@ jobs:
           assert headers.get("cache-control", "").lower() == "private, no-store", headers
           assert headers.get("referrer-policy", "").lower() == "no-referrer", headers
           PY
+            then
+              echo "Recovery fail-closed check passed on attempt $attempt."
+              exit 0
+            fi
+
+            echo "Recovery route attempt $attempt returned HTTP $code before the new route was ready."
+            if [[ "$attempt" == "30" ]]; then
+              echo "Last recovery response headers:"
+              cat "$headers_file" || true
+              exit 1
+            fi
+            sleep 15
+          done
