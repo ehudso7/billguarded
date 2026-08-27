@@ -7,7 +7,7 @@ BillGuarded is a self-service 3PL invoice reconciliation product for ecommerce o
 - Full 90-Day Audit — **$1,500 one time**
 - Continuous Monitor — **controlled early access; paid subscriptions are disabled until recurring ingestion is production-ready**
 
-The current deterministic engine accepts one CSV contract/rate card plus up to 10 CSV invoices. Checkout fails closed before payment if the supported structured files are not present.
+The current deterministic engine accepts one CSV contract/rate card plus up to 10 CSV invoices. Checkout fails closed before payment if the supported structured files are not present. The combined upload is capped at 50 MB, with a 20 MB per-file limit.
 
 ## Current deterministic checks
 
@@ -22,7 +22,7 @@ Findings require operational review and do not guarantee refunds, credits, or re
 ## Stack
 
 - Next.js 16 / React 19 / Node 22
-- Stripe Checkout + Billing + Customer Portal
+- Stripe Checkout + Billing
 - Supabase Postgres + private Storage + Vault
 - Vercel
 - Resend
@@ -61,14 +61,15 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 - Uploads use short-lived signed URLs into the private `audit-documents` bucket.
 - File count and storage-size limits are enforced server-side and in Postgres.
 - Production intake accepts CSV files only so the UI and engine have the same capability boundary.
+- Customers must accept the Terms and Privacy Notice and confirm they are authorized to upload the business records.
 
 ### Billing
 
 - Production payment state is synchronized from signature-verified Stripe webhook events.
 - Webhook event IDs are stored for idempotency.
-- Customer Portal access uses an HMAC-signed HttpOnly cookie.
-- Production Checkout and portal redirect origins are pinned to `https://www.billguarded.com`.
+- Production Checkout and post-payment redirects are pinned to `https://www.billguarded.com`.
 - Continuous Monitor Checkout is rejected until the recurring product is production-ready.
+- Only the Full 90-Day Audit product and its canonical $1,500 Price remain active in the live Stripe catalog.
 
 ### Data access
 
@@ -84,10 +85,19 @@ CI runs on pull requests and pushes to `main` and includes:
 - production dependency vulnerability audit
 - TypeScript typecheck
 - ESLint
-- Node 22 unit tests for CSV parsing and conservative recovery math
+- Node 22 unit tests for CSV parsing, conservative recovery math, retry scheduling, and stale-worker recovery
 - production Next.js build
 
-The `/api/health` endpoint also verifies that the production application can reach the database and returns `503` when that dependency is unavailable.
+Paid audit execution uses bounded retries and verifies that the request reaches a safe terminal state. A stale processing worker is recovered with a compare-and-update guard so a concurrently completed run cannot be overwritten. Partial findings from a failed attempt are removed before a fresh attempt begins.
+
+The `/api/health` endpoint verifies that the production application can reach the database and returns `503` when that dependency is unavailable.
+
+The `Production Smoke` workflow runs after each `main` deployment and daily. It verifies:
+
+- application and database health
+- public pages, legal pages, robots, and sitemap
+- security headers
+- fail-closed behavior for unsigned webhooks and malformed intake/Checkout requests
 
 ## Customer-facing trust pages
 
