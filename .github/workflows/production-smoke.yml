@@ -1,0 +1,136 @@
+name: Production Smoke
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/production-smoke.yml
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billguarded-production-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      BASE_URL: https://billguarded.com
+
+    steps:
+      - name: Wait for healthy production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+
+          for attempt in $(seq 1 30); do
+            code="$(curl --silent --show-error --location --max-time 20 \
+              --output "$body_file" --write-out '%{http_code}' \
+              "$BASE_URL/api/health" || true)"
+
+            if [[ "$code" == "200" ]] && python3 - "$body_file" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          body = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          data = json.loads(body)
+          assert data.get("ok") is True, data
+          assert data.get("service") == "billguarded", data
+          assert data.get("database") == "ok", data
+          PY
+            then
+              echo "Production health passed on attempt $attempt."
+              exit 0
+            fi
+
+            echo "Health attempt $attempt failed with HTTP $code."
+            if [[ "$attempt" == "30" ]]; then
+              echo "Last health response:"
+              cat "$body_file" || true
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify public routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /start /privacy /terms /security /robots.txt /sitemap.xml; do
+            code="$(curl --silent --show-error --location --max-time 20 \
+              --output /dev/null --write-out '%{http_code}' \
+              "$BASE_URL$path" || true)"
+            if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+              echo "$path returned HTTP $code"
+              exit 1
+            fi
+            echo "$path -> HTTP $code"
+          done
+
+      - name: Verify security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers_file="$(mktemp)"
+          curl --silent --show-error --max-time 20 \
+            --dump-header "$headers_file" --output /dev/null "$BASE_URL/"
+
+          python3 - "$headers_file" <<'PY'
+          import pathlib
+          import sys
+
+          lines = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+          headers = {}
+          for line in lines:
+              if ":" not in line:
+                  continue
+              key, value = line.split(":", 1)
+              headers[key.strip().lower()] = value.strip()
+
+          assert headers.get("x-content-type-options", "").lower() == "nosniff", headers
+          assert headers.get("x-frame-options", "").upper() == "DENY", headers
+          assert headers.get("referrer-policy", "").lower() == "strict-origin-when-cross-origin", headers
+          assert "frame-ancestors 'none'" in headers.get("content-security-policy", ""), headers
+          assert "max-age=63072000" in headers.get("strict-transport-security", ""), headers
+          PY
+
+      - name: Verify public APIs fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          webhook_code="$(curl --silent --show-error --max-time 20 \
+            --request POST --output /dev/null --write-out '%{http_code}' \
+            "$BASE_URL/api/stripe/webhook" || true)"
+          [[ "$webhook_code" == "400" ]] || {
+            echo "Unsigned webhook returned HTTP $webhook_code instead of 400"
+            exit 1
+          }
+
+          intake_code="$(curl --silent --show-error --max-time 20 \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{}' --output /dev/null --write-out '%{http_code}' \
+            "$BASE_URL/api/intake" || true)"
+          [[ "$intake_code" == "400" ]] || {
+            echo "Invalid intake returned HTTP $intake_code instead of 400"
+            exit 1
+          }
+
+          checkout_code="$(curl --silent --show-error --max-time 20 \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{}' --output /dev/null --write-out '%{http_code}' \
+            "$BASE_URL/api/stripe/checkout" || true)"
+          [[ "$checkout_code" == "400" ]] || {
+            echo "Invalid checkout returned HTTP $checkout_code instead of 400"
+            exit 1
+          }
