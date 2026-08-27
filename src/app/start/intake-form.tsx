@@ -169,7 +169,7 @@ export default function IntakeForm() {
         );
       }
 
-      setStatus("Validating structured billing data before payment…");
+      setStatus("Validating structured USD billing data before payment…");
       const checkout = await jsonOrThrow<CheckoutResponse>(
         await fetch("/api/stripe/checkout", {
           method: "POST",
@@ -218,7 +218,7 @@ export default function IntakeForm() {
           />
         </div>
         <div className="field">
-          <label htmlFor="monthly3plSpend">Approx. monthly 3PL spend ($)</label>
+          <label htmlFor="monthly3plSpend">Approx. monthly 3PL spend (USD)</label>
           <input
             id="monthly3plSpend"
             name="monthly3plSpend"
@@ -255,7 +255,7 @@ export default function IntakeForm() {
             />
           </div>
           <span className="field-help">
-            Include a service/fee code and agreed unit rate. One file, up to 20 MB.
+            Include a service/fee code and agreed unit rate. All monetary amounts must be USD. If the file contains a currency column, use USD. One file, up to 20 MB.
           </span>
         </div>
         <div className="field full">
@@ -278,8 +278,9 @@ export default function IntakeForm() {
           </div>
           <span className="field-help">
             Best results include a reference/order ID, service code, quantity,
-            unit rate, and line total. All selected files combined must be 50 MB
-            or less.
+            unit rate, and line total. Monetary amounts must be USD; a declared
+            non-USD currency is rejected before payment. All selected files
+            combined must be 50 MB or less.
           </span>
         </div>
         <div className="field full">
@@ -291,8 +292,9 @@ export default function IntakeForm() {
               required
             />
             <span>
-              I confirm I am authorized to upload these business records, agree
-              to the <a href="/terms">BillGuarded Terms</a>, and acknowledge the{" "}
+              I confirm I am authorized to upload these business records, all
+              monetary amounts submitted for this audit are USD, I agree to the{" "}
+              <a href="/terms">BillGuarded Terms</a>, and I acknowledge the{" "}
               <a href="/privacy">Privacy Notice</a>.
             </span>
           </label>
