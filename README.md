@@ -75,9 +75,10 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 
 - A successful Checkout issues an HMAC-signed, HttpOnly access cookie scoped to BillGuarded.
 - The completed audit page and downloadable findings CSV require that cookie and verify the audit belongs to the same Stripe customer.
-- Customers who change devices or lose the cookie can use a private `/recover?session_id=...` link generated from their exact paid Stripe Checkout Session.
-- The recovery route re-verifies the Checkout with Stripe, requires a completed paid 90-Day Audit, and matches the request ID, Checkout Session ID, and Stripe customer ID before issuing a fresh access cookie.
-- Recovery responses are `no-store` and use a `no-referrer` policy. The recovery URL is a bearer credential and must never be published, logged in analytics, or forwarded to another person.
+- Customers who change devices or lose the cookie can use a private `https://billguarded.com/recover#session_id=...` bearer link generated from their exact paid Stripe Checkout Session.
+- The browser fragment is not sent in the HTTP request. The recovery client immediately removes the fragment from the visible address and POSTs the credential to `/api/recover` in the request body.
+- The recovery API re-verifies the Checkout with Stripe, requires a completed paid 90-Day Audit, and matches the request ID, Checkout Session ID, and Stripe customer ID before issuing a fresh access cookie.
+- Recovery responses are `no-store`, use a `no-referrer` policy, and the recovery page is noindex/nofollow and excluded by robots. Recovery credentials must never be put in query strings, published, forwarded, or captured by analytics.
 - Customer-delivery state is tracked separately from audit completion so a failed notification can be retried without reprocessing or recharging the audit.
 
 ### Data access
@@ -99,15 +100,15 @@ CI runs on pull requests and pushes to `main` and includes:
 
 Paid audit execution uses bounded retries and verifies that the request reaches a safe terminal state. A stale processing worker is recovered with a compare-and-update guard so a concurrently completed run cannot be overwritten. Partial findings from a failed attempt are removed before a fresh attempt begins.
 
-The `/api/health` endpoint verifies that the production application can reach the database and returns `503` when that dependency is unavailable.
+The `/api/health` endpoint verifies that the production application can reach the database, reports the deployed Vercel Git commit for release certification, and returns `503` when the database dependency is unavailable.
 
-The `Production Smoke` workflow runs after each `main` deployment and daily. It verifies:
+The `Production Smoke` workflow runs after each `main` deployment and daily. For release runs it waits until the health endpoint reports the exact `GITHUB_SHA` being certified, then verifies:
 
 - application and database health
-- public pages, legal pages, robots, and sitemap
+- public pages, legal pages, private recovery page, robots, and sitemap
 - security headers
-- fail-closed behavior for unsigned webhooks and malformed intake/Checkout requests
-- fail-closed recovery behavior for missing/invalid recovery credentials
+- fail-closed behavior for unsigned webhooks and malformed intake, Checkout, and recovery requests
+- noindex/nofollow behavior on the recovery surface
 
 ## Customer-facing trust pages
 

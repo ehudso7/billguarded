@@ -59,8 +59,14 @@ export default function SecurityPage() {
           cookie, a private recovery link can re-establish access only after
           BillGuarded re-verifies the exact completed paid Stripe Checkout and
           matches its audit request, Checkout Session, and customer records.
-          Recovery links are bearer credentials: keep them private and do not
-          forward or publish them.
+        </p>
+        <p>
+          The recovery credential is placed after the URL fragment marker so it
+          is not transmitted in the initial HTTP request. The recovery page
+          removes that fragment from the address bar immediately and sends the
+          credential to a same-origin server endpoint in a POST body for
+          verification. Recovery links remain bearer credentials: keep them
+          private and do not forward or publish them.
         </p>
 
         <h2>Abuse and browser controls</h2>
@@ -68,8 +74,9 @@ export default function SecurityPage() {
           Intake creation is rate-limited, supported file types are checked
           before signed upload access is created, production redirect origins
           are pinned to the BillGuarded domain, recovery responses are not
-          cacheable and suppress referrer leakage, and the application sends
-          restrictive browser security headers.
+          cacheable and suppress referrer leakage, the recovery surface is kept
+          out of search indexes, and the application sends restrictive browser
+          security headers.
         </p>
 
         <h2>Report a security issue</h2>

@@ -1,11 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { applicationOrigin } from "@/lib/origin";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   createPortalCookie,
   portalCookieName,
 } from "@/lib/security/portal-cookie";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+
+const recoverySchema = z.object({
+  sessionId: z
+    .string()
+    .min(20)
+    .max(512)
+    .regex(/^cs_(?:live|test)_[A-Za-z0-9_]+$/),
+});
 
 function customerIdFromSession(
   customer: string | { id: string } | null,
@@ -14,31 +22,24 @@ function customerIdFromSession(
   return typeof customer === "string" ? customer : customer.id;
 }
 
-function protectRecoveryResponse(response: NextResponse) {
+function protectedJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
   response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
 
-function recoveryError(origin: string, code: string) {
-  const target = new URL("/start", origin);
-  target.searchParams.set("error", code);
-  return protectRecoveryResponse(NextResponse.redirect(target, 303));
-}
-
-export async function GET(request: NextRequest) {
-  const origin = applicationOrigin(request.url);
-  const sessionId = request.nextUrl.searchParams.get("session_id");
-
-  if (!sessionId || !/^cs_(?:live|test)_/.test(sessionId)) {
-    return recoveryError(origin, "recovery_link_invalid");
+export async function POST(request: Request) {
+  const parsed = recoverySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return protectedJson({ error: "recovery_invalid" }, { status: 400 });
   }
 
   let session;
   try {
-    session = await stripe().checkout.sessions.retrieve(sessionId);
+    session = await stripe().checkout.sessions.retrieve(parsed.data.sessionId);
   } catch {
-    return recoveryError(origin, "recovery_link_invalid");
+    return protectedJson({ error: "recovery_unavailable" }, { status: 404 });
   }
 
   const paid =
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   const customerId = customerIdFromSession(session.customer);
 
   if (!paid || !requestId || offer !== "audit_90_day" || !customerId) {
-    return recoveryError(origin, "recovery_link_unavailable");
+    return protectedJson({ error: "recovery_unavailable" }, { status: 404 });
   }
 
   const { data: audit, error } = await supabaseAdmin()
@@ -62,14 +63,12 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
 
   if (error || !audit || audit.status === "cancelled") {
-    return recoveryError(origin, "recovery_link_unavailable");
+    return protectedJson({ error: "recovery_unavailable" }, { status: 404 });
   }
 
   const cookie = createPortalCookie(customerId);
-  const target = new URL("/success", origin);
-  target.searchParams.set("request", audit.id);
-
-  const response = NextResponse.redirect(target, 303);
+  const target = `/success?request=${encodeURIComponent(audit.id)}`;
+  const response = protectedJson({ target });
   response.cookies.set(portalCookieName, cookie.value, {
     httpOnly: true,
     sameSite: "lax",
@@ -78,5 +77,5 @@ export async function GET(request: NextRequest) {
     maxAge: cookie.maxAge,
   });
 
-  return protectRecoveryResponse(response);
+  return response;
 }

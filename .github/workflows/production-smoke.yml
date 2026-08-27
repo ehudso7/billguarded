@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /start /privacy /terms /security /robots.txt /sitemap.xml; do
+          for path in / /start /recover /privacy /terms /security /robots.txt /sitemap.xml; do
             code="$(curl --silent --show-error --location --max-time 20 \
               --output /dev/null --write-out '%{http_code}' \
               "$BASE_URL$path" || true)"
@@ -144,23 +144,43 @@ jobs:
             exit 1
           }
 
-      - name: Verify recovery links fail closed
+      - name: Verify deployed recovery surface and API
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          headers_file="$(mktemp)"
-          code="$(curl --silent --show-error --max-time 20 \
-            --dump-header "$headers_file" --output /dev/null \
-            --write-out '%{http_code}' "$BASE_URL/recover" || true)"
 
-          [[ "$code" == "303" ]] || {
-            echo "Recovery route without a session returned HTTP $code instead of 303"
-            cat "$headers_file" || true
+          body_file="$(mktemp)"
+          page_code="$(curl --silent --show-error --max-time 20 \
+            --output "$body_file" --write-out '%{http_code}' \
+            "$BASE_URL/recover" || true)"
+          [[ "$page_code" == "200" ]] || {
+            echo "Recovery page returned HTTP $page_code instead of 200"
             exit 1
           }
 
-          python3 - "$headers_file" <<'PY'
+          python3 - "$body_file" <<'PY'
+          import pathlib
+          import sys
+
+          body = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").lower()
+          assert "noindex" in body, "recovery page missing noindex metadata"
+          assert "nofollow" in body, "recovery page missing nofollow metadata"
+          PY
+
+          recovery_headers="$(mktemp)"
+          recovery_code="$(curl --silent --show-error --max-time 20 \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{}' --dump-header "$recovery_headers" \
+            --output /dev/null --write-out '%{http_code}' \
+            "$BASE_URL/api/recover" || true)"
+          [[ "$recovery_code" == "400" ]] || {
+            echo "Invalid recovery returned HTTP $recovery_code instead of 400"
+            cat "$recovery_headers" || true
+            exit 1
+          }
+
+          python3 - "$recovery_headers" <<'PY'
           import pathlib
           import sys
 
@@ -172,8 +192,6 @@ jobs:
               key, value = line.split(":", 1)
               headers[key.strip().lower()] = value.strip()
 
-          location = headers.get("location", "")
-          assert "/start?error=recovery_link_invalid" in location, headers
           assert headers.get("cache-control", "").lower() == "private, no-store", headers
           assert headers.get("referrer-policy", "").lower() == "no-referrer", headers
           PY
