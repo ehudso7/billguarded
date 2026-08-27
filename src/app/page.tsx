@@ -42,7 +42,7 @@ export default function HomePage() {
         <section className="proof-strip" aria-label="How BillGuarded works">
           <div className="proof-item">
             <strong>1. Upload</strong>
-            <span>One CSV rate card plus up to 10 CSV invoices.</span>
+            <span>One USD-denominated CSV rate card plus up to 10 USD CSV invoices.</span>
           </div>
           <div className="proof-item">
             <strong>2. Reconcile</strong>
@@ -66,7 +66,7 @@ export default function HomePage() {
             <h2>Pay for an audit you can inspect.</h2>
             <p>
               No percentage-of-recovery fee and no recovery guarantee. The
-              production flow charges only after the supported CSV files have
+              production flow charges only after supported USD CSV files have
               uploaded and validated.
             </p>
           </div>
@@ -128,10 +128,10 @@ export default function HomePage() {
           </article>
           <article className="card compact-card">
             <span className="eyebrow">Fail closed</span>
-            <h3>Unsupported files are stopped before payment.</h3>
+            <h3>Unsupported inputs are stopped before payment.</h3>
             <p>
-              The live audit accepts CSV inputs only. A checkout is not opened
-              unless the required structured files are present.
+              The live audit accepts USD CSV inputs only. A checkout is not
+              opened unless the required structured files pass validation.
             </p>
           </article>
           <article className="card compact-card">
