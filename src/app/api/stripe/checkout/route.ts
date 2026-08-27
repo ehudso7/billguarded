@@ -10,6 +10,11 @@ import { checkoutSchema } from "@/lib/validation";
 
 const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
 
+type CheckoutRecovery =
+  | { kind: "url"; url: string }
+  | { kind: "expired" }
+  | { kind: "unavailable" };
+
 function isCsvDocument(document: {
   content_type: string;
   original_filename: string;
@@ -28,21 +33,28 @@ async function recoverExistingCheckout(input: {
   auditId: string;
   sessionId: string;
   requestUrl: string;
-}) {
+}): Promise<CheckoutRecovery> {
   try {
     const session = await stripe().checkout.sessions.retrieve(input.sessionId);
-    if (session.metadata?.request_id !== input.auditId) return null;
-
-    if (session.status === "open" && session.url) {
-      return session.url;
+    if (session.metadata?.request_id !== input.auditId) {
+      console.error("checkout_session_recovery_metadata_mismatch", input.auditId);
+      return { kind: "unavailable" };
     }
 
-    const paid =
-      session.payment_status === "paid" ||
-      session.payment_status === "no_payment_required";
-    if (session.status === "complete" && paid) {
+    if (session.status === "open" && session.url) {
+      return { kind: "url", url: session.url };
+    }
+
+    if (session.status === "complete") {
       const origin = applicationOrigin(input.requestUrl);
-      return `${origin}/checkout/complete?session_id=${encodeURIComponent(session.id)}`;
+      return {
+        kind: "url",
+        url: `${origin}/checkout/complete?session_id=${encodeURIComponent(session.id)}`,
+      };
+    }
+
+    if (session.status === "expired") {
+      return { kind: "expired" };
     }
   } catch (error) {
     console.error(
@@ -51,7 +63,7 @@ async function recoverExistingCheckout(input: {
     );
   }
 
-  return null;
+  return { kind: "unavailable" };
 }
 
 export async function POST(request: Request) {
@@ -94,28 +106,39 @@ export async function POST(request: Request) {
   }
 
   if (audit.status === "checkout_started" && audit.stripe_checkout_session_id) {
-    const existingUrl = await recoverExistingCheckout({
+    const recovery = await recoverExistingCheckout({
       auditId: audit.id,
       sessionId: audit.stripe_checkout_session_id,
       requestUrl: request.url,
     });
 
-    if (existingUrl) {
-      return NextResponse.json({ url: existingUrl, reused: true });
+    if (recovery.kind === "url") {
+      return NextResponse.json({ url: recovery.url, reused: true });
     }
 
-    await supabase
-      .from("audit_requests")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", audit.id)
-      .eq("status", "checkout_started");
+    if (recovery.kind === "expired") {
+      await supabase
+        .from("audit_requests")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", audit.id)
+        .eq("status", "checkout_started")
+        .eq("stripe_checkout_session_id", audit.stripe_checkout_session_id);
+
+      return NextResponse.json(
+        {
+          error:
+            "The previous Checkout Session expired and no payment was confirmed. Start a new audit workspace or contact support@billguarded.com.",
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json(
       {
         error:
-          "The previous Checkout Session is no longer usable and no payment was confirmed. Start a new audit workspace or contact support@billguarded.com.",
+          "BillGuarded could not verify the existing Checkout Session. Do not create another payment attempt; retry shortly or contact support@billguarded.com.",
       },
-      { status: 409 },
+      { status: 503 },
     );
   }
 
