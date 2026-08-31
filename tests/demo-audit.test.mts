@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { conservativePotentialRecoveryCents } from "../src/lib/audit-math.ts";
 import {
   DEMO_FINDINGS,
   DEMO_INVOICE,
@@ -28,6 +29,18 @@ test("synthetic demo keeps unpriced unsupported fees out of quantified discrepan
       ?.potentialRecoveryCents,
     0,
   );
+});
+
+test("synthetic demo total matches production conservative aggregation", () => {
+  const productionTotal = conservativePotentialRecoveryCents(
+    DEMO_FINDINGS.map((finding) => ({
+      source_document_id: "synthetic-invoice.csv",
+      source_row: finding.sourceRow,
+      potential_recovery_cents: finding.potentialRecoveryCents,
+    })),
+  );
+
+  assert.equal(productionTotal, DEMO_QUANTIFIED_POTENTIAL_CENTS);
 });
 
 test("synthetic demo totals remain deterministic", () => {
