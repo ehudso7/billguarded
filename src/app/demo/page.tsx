@@ -11,10 +11,27 @@ import {
 } from "@/lib/demo-audit";
 import styles from "./demo.module.css";
 
+const demoTitle = "Synthetic 3PL invoice audit demo | BillGuarded";
+const demoDescription =
+  "See a synthetic BillGuarded walkthrough of rate-card matching, duplicate charges, unsupported fees, arithmetic mismatches, and rate mismatches.";
+const demoUrl = "https://billguarded.com/demo";
+
 export const metadata: Metadata = {
-  title: "Synthetic 3PL invoice audit demo | BillGuarded",
-  description:
-    "See a synthetic BillGuarded walkthrough of rate-card matching, duplicate charges, unsupported fees, arithmetic mismatches, and rate mismatches.",
+  title: demoTitle,
+  description: demoDescription,
+  alternates: { canonical: demoUrl },
+  openGraph: {
+    title: demoTitle,
+    description: demoDescription,
+    url: demoUrl,
+    siteName: "BillGuarded",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: demoTitle,
+    description: demoDescription,
+  },
 };
 
 const findingTone = {
