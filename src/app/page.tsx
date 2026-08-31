@@ -30,6 +30,9 @@ export default function HomePage() {
             <Link className="button primary" href="/start">
               Start a 90-day audit →
             </Link>
+            <Link className="button" href="/demo">
+              See a synthetic audit demo
+            </Link>
             <a
               className="button"
               href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
