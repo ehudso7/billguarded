@@ -1,0 +1,403 @@
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.7fr);
+  gap: 42px;
+  align-items: end;
+  padding: 68px 0 38px;
+}
+
+.hero h1 {
+  max-width: 850px;
+  margin: 16px 0 18px;
+  font-size: clamp(44px, 7vw, 82px);
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+}
+
+.hero p,
+.sectionHeading p,
+.cta p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.summaryCard {
+  display: grid;
+  gap: 8px;
+  padding: 28px;
+  border: 1px solid rgba(107, 240, 189, 0.32);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(107, 240, 189, 0.12), transparent 55%),
+    rgba(10, 25, 21, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.summaryCard strong {
+  font-size: clamp(34px, 4vw, 54px);
+  letter-spacing: -0.055em;
+}
+
+.summaryCard small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.summaryLabel {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryDivider {
+  height: 1px;
+  margin: 12px 0;
+  background: var(--border);
+}
+
+.recovery {
+  color: var(--accent);
+}
+
+.notice {
+  margin: 26px 0 46px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.notice strong {
+  color: var(--text);
+}
+
+.notice p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.flow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 76px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--border);
+  box-shadow: var(--shadow);
+}
+
+.flow article {
+  min-height: 190px;
+  padding: 26px;
+  background: rgba(8, 20, 17, 0.95);
+}
+
+.flow article > span {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.flow h2 {
+  margin: 34px 0 8px;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.flow p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.section {
+  padding: 54px 0;
+}
+
+.sectionHeading {
+  max-width: 760px;
+  margin-bottom: 26px;
+}
+
+.sectionHeading h2,
+.controlSection h2,
+.cta h2 {
+  margin: 8px 0 12px;
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.052em;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(9, 22, 18, 0.88);
+  box-shadow: var(--shadow);
+}
+
+.table {
+  width: 100%;
+  min-width: 740px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: #c6d6d1;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.table td {
+  color: #dce7e3;
+  font-size: 14px;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table code,
+.findingCard code {
+  color: #c8f9e8;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.flaggedRow {
+  background: rgba(255, 154, 141, 0.035);
+}
+
+.passPill,
+.reviewPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.passPill {
+  color: #75ebbd;
+  background: rgba(56, 217, 155, 0.11);
+}
+
+.reviewPill {
+  color: #ffd3cc;
+  background: rgba(255, 154, 141, 0.1);
+}
+
+.findingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.findingCard {
+  display: grid;
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(18, 39, 33, 0.76), rgba(8, 21, 17, 0.88));
+  box-shadow: var(--shadow);
+}
+
+.findingTopline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.findingBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.duplicate {
+  color: #ffd4cd;
+  background: rgba(255, 154, 141, 0.1);
+}
+
+.unsupported {
+  color: #f9dca2;
+  background: rgba(236, 183, 83, 0.11);
+}
+
+.arithmetic {
+  color: #cfe3ff;
+  background: rgba(115, 171, 246, 0.11);
+}
+
+.rate {
+  color: #d7caff;
+  background: rgba(153, 121, 255, 0.11);
+}
+
+.findingCard h3 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.findingCard > p {
+  min-height: 48px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.findingCard dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+
+.findingCard dl div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.findingCard dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.findingCard dd {
+  margin: 6px 0 0;
+  font-weight: 700;
+}
+
+.evidence {
+  padding: 15px 16px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  background: rgba(107, 240, 189, 0.045);
+  color: #c7d7d2;
+  line-height: 1.55;
+}
+
+.evidence span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.controlSection {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 42px;
+  align-items: start;
+  margin: 60px 0;
+  padding: 34px;
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: rgba(9, 22, 18, 0.78);
+}
+
+.controlList {
+  display: grid;
+  gap: 12px;
+}
+
+.controlList p {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.028);
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.controlList strong {
+  color: var(--text);
+}
+
+.cta {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 36px;
+  align-items: end;
+  margin: 72px 0 86px;
+  padding: 36px;
+  border: 1px solid rgba(107, 240, 189, 0.3);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 0 100%, rgba(107, 240, 189, 0.11), transparent 45%),
+    rgba(12, 29, 24, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.ctaActions {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 860px) {
+  .hero,
+  .controlSection,
+  .cta {
+    grid-template-columns: 1fr;
+  }
+
+  .flow,
+  .findingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .findingCard dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero {
+    padding-top: 42px;
+  }
+
+  .summaryCard,
+  .findingCard,
+  .controlSection,
+  .cta {
+    padding: 22px;
+  }
+}
