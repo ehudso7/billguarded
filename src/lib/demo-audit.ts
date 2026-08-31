@@ -1,5 +1,3 @@
-import { conservativePotentialRecoveryCents } from "@/lib/audit-math";
-
 export type DemoFindingType =
   | "duplicate_charge"
   | "unsupported_fee"
@@ -170,14 +168,14 @@ export const DEMO_TOTAL_BILLED_CENTS = DEMO_INVOICE.reduce(
   0,
 );
 
-export const DEMO_QUANTIFIED_POTENTIAL_CENTS =
-  conservativePotentialRecoveryCents(
-    DEMO_FINDINGS.map((finding) => ({
-      source_document_id: "synthetic-invoice.csv",
-      source_row: finding.sourceRow,
-      potential_recovery_cents: finding.potentialRecoveryCents,
-    })),
-  );
+// Every quantified demo finding is intentionally on a distinct source row. The
+// test suite separately runs these values through the production conservative
+// aggregation helper to prove this displayed total stays aligned with runtime
+// anti-double-counting semantics.
+export const DEMO_QUANTIFIED_POTENTIAL_CENTS = DEMO_FINDINGS.reduce(
+  (total, finding) => total + Math.max(0, finding.potentialRecoveryCents),
+  0,
+);
 
 export const DEMO_UNPRICED_FINDINGS = DEMO_FINDINGS.filter(
   (finding) => finding.expectedAmountCents === null,
