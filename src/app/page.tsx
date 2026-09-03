@@ -18,11 +18,11 @@ export default function HomePage() {
         </nav>
 
         <section className="hero">
-          <span className="eyebrow">3PL invoice intelligence</span>
-          <h1>Find the charges your warehouse should not have billed.</h1>
+          <span className="eyebrow">3PL contract reconciliation</span>
+          <h1>Check whether your 3PL billed what you agreed.</h1>
           <p>
-            BillGuarded reconciles structured fulfillment invoices against the
-            commercial terms you supplied, surfaces evidence-backed
+            BillGuarded reconciles structured 3PL invoices against the rate
+            card or commercial terms you supply, surfaces evidence-backed
             discrepancies, and gives your team a clean record to review before
             disputing anything.
           </p>
