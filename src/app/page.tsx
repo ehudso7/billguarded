@@ -19,7 +19,7 @@ export default function HomePage() {
 
         <section className="hero">
           <span className="eyebrow">3PL contract reconciliation</span>
-          <h1>Check whether your 3PL billed what you agreed.</h1>
+          <h1>Check whether your 3PL billed what you agreed to.</h1>
           <p>
             BillGuarded reconciles structured 3PL invoices against the rate
             card or commercial terms you supply, surfaces evidence-backed
