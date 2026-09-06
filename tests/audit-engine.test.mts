@@ -233,6 +233,33 @@ test("potential recovery never rewards under-billing and never double counts one
   );
 });
 
+test("credit lines and fractional quantities never produce a claimed recovery", () => {
+  const findings = analyze(
+    [
+      "line_id,service_code,quantity,unit_rate,amount",
+      "C1,PICK_EACH,-10,1.20,-12.00", // contract-rate credit: arithmetic holds, nothing to recover
+      "C1,PICK_EACH,-10,1.20,-12.00", // duplicated credit: flagged, but a credit cannot be "recovered"
+      "C2,PICK_EACH,1,-1.20,-1.20", // negative unit rate mismatches the contract rate; still no recovery
+      "F1,storage-bin,2.5,18.00,45.00", // fractional quantity that multiplies cleanly
+      "F2,storage-bin,0.333,18.00,5.99", // 5.994 rounds to 5.99 — within the cent tolerance
+    ].join("\n"),
+    INVOICE_A,
+  );
+
+  const duplicate = byType(findings, "duplicate_charge");
+  assert.equal(duplicate.length, 1);
+  assert.equal(duplicate[0].source_row, 3);
+  assert.equal(duplicate[0].potential_recovery_cents, 0, "a duplicated credit is never counted as money owed");
+
+  const rateMismatch = byType(findings, "rate_mismatch");
+  assert.deepEqual(rateMismatch.map((f) => f.source_row), [4]);
+  assert.equal(rateMismatch[0].potential_recovery_cents, 0);
+
+  assert.equal(byType(findings, "arithmetic_mismatch").length, 0, "fractional quantities within one cent are not mismatches");
+  assert.equal(byType(findings, "unsupported_fee").length, 0);
+  assert.equal(conservativePotentialRecoveryCents(findings), 0);
+});
+
 test("the same inputs always produce byte-identical findings (audit reproducibility)", () => {
   const csv = [
     "line_id,service_code,quantity,unit_rate,amount",
