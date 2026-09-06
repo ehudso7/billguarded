@@ -4,8 +4,16 @@ const baseUrl = "https://billguarded.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date("2026-08-31T00:00:00.000Z");
+  const auditLandingModified = new Date("2026-09-06T00:00:00.000Z");
+
   return [
     { url: `${baseUrl}/`, lastModified, changeFrequency: "weekly", priority: 1 },
+    {
+      url: `${baseUrl}/3pl-invoice-audit`,
+      lastModified: auditLandingModified,
+      changeFrequency: "weekly",
+      priority: 0.95,
+    },
     {
       url: `${baseUrl}/demo`,
       lastModified,
