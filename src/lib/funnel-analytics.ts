@@ -9,7 +9,6 @@ import {
 } from "@/lib/funnel-attribution";
 import {
   CLIENT_FUNNEL_EVENTS,
-  FUNNEL_EVENT_NAMES,
   PUBLIC_ANALYTICS_PATHS,
   type FunnelEventName,
 } from "@/lib/funnel-events";
