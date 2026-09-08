@@ -74,6 +74,10 @@ button {
 }
 
 .nav-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -110,6 +114,17 @@ button {
   color: var(--muted);
   font-size: clamp(18px, 2vw, 22px);
   line-height: 1.55;
+}
+
+.hero .offer-summary {
+  max-width: 760px;
+  margin-top: 18px;
+  color: #c9d8d3;
+  font-size: 16px;
+}
+
+.offer-summary strong {
+  color: var(--text);
 }
 
 .hero-actions {
@@ -358,6 +373,16 @@ button {
   font-size: 14px;
 }
 
+.status:focus {
+  outline: none;
+}
+
+.status a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .error {
   color: var(--danger);
 }
@@ -418,5 +443,17 @@ button {
 
   .hero {
     padding-top: 48px;
+  }
+
+  .hero h1 {
+    font-size: clamp(42px, 13vw, 62px);
+  }
+
+  .hero-actions .button {
+    width: 100%;
+  }
+
+  .success-card {
+    padding: 26px;
   }
 }

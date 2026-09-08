@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import {
   isOfferId,
   type OfferId,
@@ -238,6 +239,29 @@ async function handleCheckoutCompleted(
 
   if (error) throw error;
   if (!recorded) throw new Error("paid_audit_not_recorded");
+
+  for (const eventName of [
+    "paid_audit_confirmed",
+    "paid_audit_queued",
+  ] as const) {
+    try {
+      await recordAuditFunnelEvent({
+        auditRequestId: requestId,
+        eventName,
+        dedupePart: eventId,
+      });
+    } catch (analyticsError) {
+      console.error(
+        "paid_audit_funnel_event_failed",
+        eventName,
+        analyticsError &&
+          typeof analyticsError === "object" &&
+          "code" in analyticsError
+          ? String(analyticsError.code).slice(0, 80)
+          : "unknown_error",
+      );
+    }
+  }
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {

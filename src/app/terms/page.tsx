@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Terms — BillGuarded",
   description: "Terms for using BillGuarded invoice reconciliation services.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { after, NextResponse } from "next/server";
+import { recordIntakeAttribution } from "@/lib/funnel-analytics";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { intakeSchema } from "@/lib/validation";
 
@@ -126,6 +127,22 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Could not create the audit workspace." },
       { status: 500 },
+    );
+  }
+
+  try {
+    await recordIntakeAttribution({
+      auditRequestId: data.id,
+      attribution: parsed.data.attribution,
+    });
+  } catch (analyticsError) {
+    console.error(
+      "intake_attribution_persistence_failed",
+      analyticsError &&
+        typeof analyticsError === "object" &&
+        "code" in analyticsError
+        ? String(analyticsError.code).slice(0, 80)
+        : "unknown_error",
     );
   }
 

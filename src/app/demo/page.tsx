@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FunnelPageView, TrackedAnchor } from "@/app/funnel-tracker";
 import {
   DEMO_FINDINGS,
   DEMO_INVOICE,
@@ -46,6 +47,7 @@ const findingRows = new Set(DEMO_FINDINGS.map((finding) => finding.sourceRow));
 export default function DemoPage() {
   return (
     <main>
+      <FunnelPageView eventName="demo_view" path="/demo" />
       <div className="shell">
         <nav className="nav">
           <Link className="brand" href="/">
@@ -274,12 +276,14 @@ export default function DemoPage() {
             </p>
           </div>
           <div className={styles.ctaActions}>
-            <a
+            <TrackedAnchor
               className="button primary"
               href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              eventName="fit_check_click"
+              path="/demo"
             >
               Ask for the free fit check →
-            </a>
+            </TrackedAnchor>
             <Link className="button" href="/start">
               See the production audit flow
             </Link>

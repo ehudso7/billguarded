@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { intakeAttributionSchema } from "@/lib/funnel-analytics";
 
 const accessTokenSchema = z
   .string()
@@ -13,6 +14,7 @@ export const intakeSchema = z.object({
   monthly3plSpend: z.coerce.number().int().min(0).max(100_000_000),
   invoiceCount: z.coerce.number().int().min(1).max(10_000),
   termsAccepted: z.literal(true),
+  attribution: intakeAttributionSchema.optional(),
 });
 
 export const uploadRequestSchema = z.object({

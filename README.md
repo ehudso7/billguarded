@@ -101,6 +101,8 @@ CI runs on pull requests and pushes to `main` and includes:
 
 Paid audit execution is claimed from Postgres by an independently scheduled, bearer-protected Vercel worker. Payment evidence, processing attempts, leases, retries, stale recovery, terminal failures, customer-delivery claims, provider acceptance, and Resend lifecycle events remain durable across serverless invocations. Partial findings from an interrupted or failed attempt are removed before a fresh attempt begins. An uncertain provider outcome is quarantined for operator reconciliation and is never blindly resent.
 
+The privacy-safe acquisition and conversion contract is documented in [`docs/CONVERSION-MEASUREMENT.md`](docs/CONVERSION-MEASUREMENT.md). It uses the existing Supabase project as a server-only first-party ledger, stores only allowlisted attribution, and never treats a browser redirect as payment evidence.
+
 The `/api/health` endpoint verifies that the production application can reach the database, reports the deployed Vercel Git commit for release certification, and returns `503` when the database dependency is unavailable.
 
 The `Production Smoke` workflow runs after each `main` deployment and daily. For release runs it waits until the health endpoint reports the exact `GITHUB_SHA` being certified, then verifies:

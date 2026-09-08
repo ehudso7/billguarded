@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { preflightAuditDocuments } from "@/lib/audit-preflight";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import { OFFERS } from "@/lib/offers";
 import { applicationOrigin } from "@/lib/origin";
 import { intakeAccessTokenHash } from "@/lib/security/intake-access";
@@ -9,6 +10,37 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkoutSchema } from "@/lib/validation";
 
 const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
+
+async function recordCheckoutEvent(
+  auditRequestId: string,
+  eventName:
+    | "checkout_started"
+    | "checkout_creation_failed"
+    | "checkout_abandoned"
+    | "unsupported_file_rejected",
+  dedupePart: string,
+) {
+  try {
+    await recordAuditFunnelEvent({
+      auditRequestId,
+      eventName,
+      dedupePart,
+      outcome:
+        eventName === "unsupported_file_rejected"
+          ? "preflight"
+          : eventName === "checkout_started"
+            ? undefined
+            : "checkout",
+    });
+  } catch (error) {
+    console.error(
+      "checkout_funnel_event_failed",
+      error && typeof error === "object" && "code" in error
+        ? String(error.code).slice(0, 80)
+        : "unknown_error",
+    );
+  }
+}
 
 type CheckoutRecovery =
   | { kind: "url"; url: string }
@@ -113,6 +145,11 @@ export async function POST(request: Request) {
     });
 
     if (recovery.kind === "url") {
+      await recordCheckoutEvent(
+        audit.id,
+        "checkout_started",
+        audit.stripe_checkout_session_id,
+      );
       return NextResponse.json({ url: recovery.url, reused: true });
     }
 
@@ -123,6 +160,12 @@ export async function POST(request: Request) {
         .eq("id", audit.id)
         .eq("status", "checkout_started")
         .eq("stripe_checkout_session_id", audit.stripe_checkout_session_id);
+
+      await recordCheckoutEvent(
+        audit.id,
+        "checkout_abandoned",
+        audit.stripe_checkout_session_id,
+      );
 
       return NextResponse.json(
         {
@@ -169,6 +212,11 @@ export async function POST(request: Request) {
 
   const csvDocuments = documents.filter(isCsvDocument);
   if (csvDocuments.length !== documents.length) {
+    await recordCheckoutEvent(
+      audit.id,
+      "unsupported_file_rejected",
+      "non_csv_document",
+    );
     return NextResponse.json(
       {
         error:
@@ -185,6 +233,11 @@ export async function POST(request: Request) {
     (document) => document.kind === "invoice",
   );
   if (!hasCsvTerms || !hasCsvInvoice) {
+    await recordCheckoutEvent(
+      audit.id,
+      "unsupported_file_rejected",
+      "required_document_missing",
+    );
     return NextResponse.json(
       {
         error:
@@ -196,6 +249,11 @@ export async function POST(request: Request) {
 
   const preflight = await preflightAuditDocuments(csvDocuments);
   if (!preflight.ok) {
+    await recordCheckoutEvent(
+      audit.id,
+      "unsupported_file_rejected",
+      "structured_preflight",
+    );
     return NextResponse.json(
       { error: preflight.message },
       { status: 409 },
@@ -230,6 +288,11 @@ export async function POST(request: Request) {
       "checkout_session_create_failed",
       error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
     );
+    await recordCheckoutEvent(
+      audit.id,
+      "checkout_creation_failed",
+      "stripe_session_create",
+    );
     return NextResponse.json(
       {
         error:
@@ -240,6 +303,11 @@ export async function POST(request: Request) {
   }
 
   if (!session.url) {
+    await recordCheckoutEvent(
+      audit.id,
+      "checkout_creation_failed",
+      "stripe_session_url_missing",
+    );
     return NextResponse.json(
       { error: "Stripe did not return a checkout URL. No charge was created." },
       { status: 502 },
@@ -282,6 +350,7 @@ export async function POST(request: Request) {
       currentAudit?.status === "checkout_started" &&
       currentAudit.stripe_checkout_session_id === session.id
     ) {
+      await recordCheckoutEvent(audit.id, "checkout_started", session.id);
       return NextResponse.json({ url: session.url, reused: true });
     }
 
@@ -294,6 +363,8 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+
+  await recordCheckoutEvent(audit.id, "checkout_started", session.id);
 
   return NextResponse.json({ url: session.url });
 }

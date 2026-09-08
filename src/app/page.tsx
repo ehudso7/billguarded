@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FunnelPageView, TrackedAnchor } from "@/app/funnel-tracker";
 import { OFFERS } from "@/lib/offers";
 
 export default function HomePage() {
@@ -6,6 +7,7 @@ export default function HomePage() {
 
   return (
     <main>
+      <FunnelPageView eventName="landing_view" path="/" />
       <div className="shell">
         <nav className="nav">
           <Link className="brand" href="/">
@@ -26,6 +28,11 @@ export default function HomePage() {
             discrepancies, and gives your team a clean record to review before
             disputing anything.
           </p>
+          <p className="offer-summary">
+            <strong>Full 90-Day Audit — $1,500 one time.</strong> Upload one
+            supported USD CSV rate card and up to 10 USD CSV invoices before
+            secure Checkout opens.
+          </p>
           <div className="hero-actions">
             <Link className="button primary" href="/start">
               Start a 90-day audit →
@@ -33,12 +40,14 @@ export default function HomePage() {
             <Link className="button" href="/demo">
               See a synthetic audit demo
             </Link>
-            <a
+            <TrackedAnchor
               className="button"
               href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              eventName="fit_check_click"
+              path="/"
             >
               Ask for a free fit check
-            </a>
+            </TrackedAnchor>
           </div>
         </section>
 
@@ -154,6 +163,7 @@ export default function HomePage() {
             refunds, credits, or recoveries.
           </div>
           <div className="footer-links">
+            <Link href="/3pl-invoice-audit">3PL invoice audit</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
             <Link href="/security">Security</Link>

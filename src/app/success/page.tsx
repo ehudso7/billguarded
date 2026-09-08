@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import AutoRefresh from "./auto-refresh";
@@ -9,6 +10,12 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type SuccessPageProps = {
   searchParams: Promise<{ pending?: string; request?: string }>;
+};
+
+export const metadata: Metadata = {
+  title: "Private Audit Status | BillGuarded",
+  alternates: { canonical: "/success" },
+  robots: { index: false, follow: false },
 };
 
 type FindingRow = {

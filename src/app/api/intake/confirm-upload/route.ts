@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
@@ -128,6 +129,26 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Could not confirm the uploaded document." },
       { status: 500 },
+    );
+  }
+
+  try {
+    await recordAuditFunnelEvent({
+      auditRequestId: audit.id,
+      eventName:
+        reservation.kind === "invoice"
+          ? "invoice_upload_completed"
+          : "rate_card_uploaded",
+      dedupePart: reservation.id,
+    });
+  } catch (analyticsError) {
+    console.error(
+      "upload_funnel_event_failed",
+      analyticsError &&
+        typeof analyticsError === "object" &&
+        "code" in analyticsError
+        ? String(analyticsError.code).slice(0, 80)
+        : "unknown_error",
     );
   }
 

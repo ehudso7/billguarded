@@ -1,5 +1,6 @@
 import { parseCsv } from "@/lib/audit-csv";
 import { conservativePotentialRecoveryCents } from "@/lib/audit-math";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import {
   analyzeInvoiceRows,
   buildRateMap,
@@ -76,6 +77,24 @@ async function failClaimedWork(
   if (recordError) throw recordError;
   if (data === "claim_lost") {
     throw new Error("audit_work_claim_lost");
+  }
+
+  try {
+    await recordAuditFunnelEvent({
+      auditRequestId: claim.auditRequestId,
+      eventName: "audit_failed",
+      dedupePart: `${claim.runId}:${claim.attemptNumber}`,
+      outcome: data === "retryable" ? "retryable" : "terminal",
+    });
+  } catch (analyticsError) {
+    console.error(
+      "audit_failure_funnel_event_failed",
+      analyticsError &&
+        typeof analyticsError === "object" &&
+        "code" in analyticsError
+        ? String(analyticsError.code).slice(0, 80)
+        : "unknown_error",
+    );
   }
 
   return {
@@ -190,6 +209,23 @@ export async function processClaimedAuditWork(
     );
     if (completeError) throw completeError;
     if (!completed) throw new Error("audit_work_claim_lost");
+
+    try {
+      await recordAuditFunnelEvent({
+        auditRequestId: claim.auditRequestId,
+        eventName: "audit_completed",
+        dedupePart: claim.runId,
+      });
+    } catch (analyticsError) {
+      console.error(
+        "audit_completion_funnel_event_failed",
+        analyticsError &&
+          typeof analyticsError === "object" &&
+          "code" in analyticsError
+          ? String(analyticsError.code).slice(0, 80)
+          : "unknown_error",
+      );
+    }
 
     return { state: "complete" };
   } catch (error) {
