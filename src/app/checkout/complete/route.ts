@@ -1,5 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
-import { processAuditRequestWithRetry } from "@/lib/audit-processing";
+import { NextRequest, NextResponse } from "next/server";
 import { applicationOrigin } from "@/lib/origin";
 import { isOfferId } from "@/lib/offers";
 import {
@@ -19,10 +18,6 @@ function customerIdFromSession(
 ): string | null {
   if (!customer) return null;
   return typeof customer === "string" ? customer : customer.id;
-}
-
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function promotePaidSandboxCheckout(input: {
@@ -98,35 +93,6 @@ async function promotePaidSandboxCheckout(input: {
   }
 }
 
-async function startPaidAudit(requestId: string) {
-  const supabase = supabaseAdmin();
-  const delays = [0, 500, 1000, 2000, 4000];
-
-  for (const delay of delays) {
-    if (delay > 0) await sleep(delay);
-
-    const { data, error } = await supabase
-      .from("audit_requests")
-      .select("status")
-      .eq("id", requestId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("billguarded_audit_status_poll_failed", requestId, error.code);
-      continue;
-    }
-
-    if (data?.status === "paid" || data?.status === "processing") {
-      await processAuditRequestWithRetry(requestId);
-      return;
-    }
-
-    if (data?.status === "complete" || data?.status === "cancelled") return;
-  }
-
-  console.warn("billguarded_audit_waiting_for_webhook", requestId);
-}
-
 export async function GET(request: NextRequest) {
   const origin = applicationOrigin(request.url);
   const sessionId = request.nextUrl.searchParams.get("session_id");
@@ -186,7 +152,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    after(() => startPaidAudit(requestId));
   }
 
   const response = NextResponse.redirect(target);

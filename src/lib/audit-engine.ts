@@ -7,18 +7,28 @@ import {
   type DocumentRow,
   type DuplicateOrigin,
 } from "@/lib/audit-reconcile";
-import { shouldRecoverProcessingRun } from "@/lib/audit-recovery";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export type { AuditFindingInsert, DocumentRow } from "@/lib/audit-reconcile";
 
+export type AuditWorkClaim = {
+  auditRequestId: string;
+  runId: string;
+  claimToken: string;
+  attemptNumber: number;
+};
+
+export type AuditWorkResult = {
+  state: "complete" | "retryable" | "permanently_failed";
+  errorCode?: string;
+};
+
 function isCsvDocument(document: DocumentRow) {
   return (
-    document.content_type === "text/csv" ||
+    document.content_type === "text/csv" &&
     document.original_filename.toLowerCase().endsWith(".csv")
   );
 }
-
 async function documentText(document: DocumentRow) {
   const { data, error } = await supabaseAdmin().storage
     .from("audit-documents")
@@ -27,9 +37,9 @@ async function documentText(document: DocumentRow) {
   return data.text();
 }
 
-
 function deterministicInputError(message: string) {
   return (
+    message === "structured_csv_required" ||
     message === "rate_card_has_no_recognized_rates" ||
     message === "csv_unclosed_quote" ||
     message === "csv_headers_invalid" ||
@@ -37,168 +47,83 @@ function deterministicInputError(message: string) {
   );
 }
 
-async function updateAuditRequest(
-  requestId: string,
-  values: Record<string, unknown>,
-) {
-  const { error } = await supabaseAdmin()
-    .from("audit_requests")
-    .update(values)
-    .eq("id", requestId);
-  if (error) throw error;
+function safeError(error: unknown) {
+  return error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
 }
 
-async function updateAuditRun(runId: string, values: Record<string, unknown>) {
-  const { error } = await supabaseAdmin()
-    .from("audit_runs")
-    .update(values)
-    .eq("id", runId);
-  if (error) throw error;
+async function failClaimedWork(
+  claim: AuditWorkClaim,
+  error: unknown,
+): Promise<AuditWorkResult> {
+  const message = safeError(error);
+  const inputFailure = deterministicInputError(message);
+  const errorCode = inputFailure
+    ? "structured_data_invalid"
+    : "audit_engine_failed";
+
+  const { data, error: recordError } = await supabaseAdmin().rpc(
+    "billguarded_fail_audit_work",
+    {
+      p_request_id: claim.auditRequestId,
+      p_run_id: claim.runId,
+      p_claim_token: claim.claimToken,
+      p_retryable: !inputFailure,
+      p_error_code: errorCode,
+      p_error_message: message,
+    },
+  );
+
+  if (recordError) throw recordError;
+  if (data === "claim_lost") {
+    throw new Error("audit_work_claim_lost");
+  }
+
+  return {
+    state: data === "retryable" ? "retryable" : "permanently_failed",
+    errorCode,
+  };
 }
 
-async function safelyRecordFailure(input: {
-  runId: string;
-  requestId: string;
-  status: "failed" | "needs_review";
-  errorCode: string;
-  message: string;
-}) {
-  const now = new Date().toISOString();
-
-  const { error: cleanupError } = await supabaseAdmin()
-    .from("audit_findings")
-    .delete()
-    .eq("audit_run_id", input.runId);
-  if (cleanupError) {
-    console.error(
-      "audit_failure_findings_cleanup_failed",
-      input.runId,
-      cleanupError.code,
-    );
-  }
-
-  const { error: runError } = await supabaseAdmin()
-    .from("audit_runs")
-    .update({
-      status: input.status,
-      error_code: input.errorCode,
-      error_message: input.message,
-      completed_at: now,
-      updated_at: now,
-    })
-    .eq("id", input.runId);
-  if (runError) {
-    console.error("audit_failure_run_update_failed", input.runId, runError.code);
-  }
-
-  const { error: requestError } = await supabaseAdmin()
-    .from("audit_requests")
-    .update({ status: "paid", updated_at: now })
-    .eq("id", input.requestId);
-  if (requestError) {
-    console.error(
-      "audit_failure_request_update_failed",
-      input.requestId,
-      requestError.code,
-    );
-  }
-}
-
-async function recoverStaleRun(input: {
-  id: string;
-  started_at: string | null;
-  created_at: string;
-  requestId: string;
-  requestStatus: string;
-}) {
-  if (
-    !shouldRecoverProcessingRun({
-      startedAt: input.started_at,
-      createdAt: input.created_at,
-      requestStatus: input.requestStatus,
-    })
-  ) {
-    return false;
-  }
-
-  const now = new Date().toISOString();
-  const { data: recovered, error } = await supabaseAdmin()
-    .from("audit_runs")
-    .update({
-      status: "failed",
-      error_code: "stale_processing_run",
-      error_message: "Previous audit worker did not reach a terminal state.",
-      completed_at: now,
-      updated_at: now,
-    })
-    .eq("id", input.id)
-    .eq("status", "processing")
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
-  if (!recovered) return false;
-
-  await updateAuditRequest(input.requestId, {
-    status: "paid",
-    updated_at: now,
-  });
-  return true;
-}
-
-export async function processAuditRequest(requestId: string) {
+export async function processClaimedAuditWork(
+  claim: AuditWorkClaim,
+): Promise<AuditWorkResult> {
   const supabase = supabaseAdmin();
 
-  const { data: request, error: requestError } = await supabase
-    .from("audit_requests")
-    .select("id,status")
-    .eq("id", requestId)
-    .maybeSingle();
-  if (requestError) throw requestError;
-  if (!request || !["paid", "processing"].includes(request.status)) return;
-
-  const { data: existing, error: existingError } = await supabase
-    .from("audit_runs")
-    .select("id,status,started_at,created_at")
-    .eq("audit_request_id", requestId)
-    .in("status", ["queued", "processing", "complete", "needs_review"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existingError) throw existingError;
-
-  if (existing) {
-    if (existing.status !== "processing") return;
-    const recovered = await recoverStaleRun({
-      id: existing.id,
-      started_at: existing.started_at,
-      created_at: existing.created_at,
-      requestId,
-      requestStatus: request.status,
-    });
-    if (!recovered) return;
-  }
-
-  const { data: run, error: runError } = await supabase
-    .from("audit_runs")
-    .insert({
-      audit_request_id: requestId,
-      status: "processing",
-      started_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-  if (runError) throw runError;
-
-  await updateAuditRequest(requestId, {
-    status: "processing",
-    updated_at: new Date().toISOString(),
-  });
-
   try {
+    const { data: request, error: requestError } = await supabase
+      .from("audit_requests")
+      .select("id,status,selected_offer")
+      .eq("id", claim.auditRequestId)
+      .maybeSingle();
+    if (requestError) throw requestError;
+    if (
+      !request ||
+      request.status !== "processing" ||
+      request.selected_offer !== "audit_90_day"
+    ) {
+      throw new Error("audit_work_claim_invalid");
+    }
+
+    const { data: run, error: runError } = await supabase
+      .from("audit_runs")
+      .select("id,status,attempt_number,work_claim_token")
+      .eq("id", claim.runId)
+      .eq("audit_request_id", claim.auditRequestId)
+      .maybeSingle();
+    if (runError) throw runError;
+    if (
+      !run ||
+      run.status !== "processing" ||
+      run.attempt_number !== claim.attemptNumber ||
+      run.work_claim_token !== claim.claimToken
+    ) {
+      throw new Error("audit_run_claim_invalid");
+    }
+
     const { data: documents, error: documentsError } = await supabase
       .from("audit_documents")
       .select("id,kind,original_filename,storage_path,content_type,upload_status")
-      .eq("audit_request_id", requestId)
+      .eq("audit_request_id", claim.auditRequestId)
       .eq("upload_status", "uploaded");
     if (documentsError) throw documentsError;
 
@@ -213,21 +138,7 @@ export async function processAuditRequest(requestId: string) {
     );
 
     if (!termsDocument || invoiceDocuments.length === 0) {
-      const now = new Date().toISOString();
-      await updateAuditRun(run.id, {
-        status: "needs_review",
-        source_document_count: typedDocuments.length,
-        error_code: "structured_csv_required",
-        error_message:
-          "Deterministic v1 requires a CSV contract/rate card and at least one CSV invoice.",
-        completed_at: now,
-        updated_at: now,
-      });
-      await updateAuditRequest(requestId, {
-        status: "paid",
-        updated_at: now,
-      });
-      return;
+      throw new Error("structured_csv_required");
     }
 
     const rateRows = parseCsv(await documentText(termsDocument));
@@ -241,15 +152,17 @@ export async function processAuditRequest(requestId: string) {
     for (const document of invoiceDocuments) {
       const rows = parseCsv(await documentText(document));
       if (rows.length === 0) {
-        throw new Error(`invoice_has_no_data_rows:${document.original_filename}`);
+        throw new Error(
+          `invoice_has_no_data_rows:${document.original_filename}`,
+        );
       }
       findings.push(
         ...analyzeInvoiceRows({
           rows,
           document,
           rateMap,
-          runId: run.id,
-          requestId,
+          runId: claim.runId,
+          requestId: claim.auditRequestId,
           seenDuplicates,
         }),
       );
@@ -262,35 +175,30 @@ export async function processAuditRequest(requestId: string) {
       if (findingsError) throw findingsError;
     }
 
-    const potentialRecoveryCents = conservativePotentialRecoveryCents(findings);
-    const now = new Date().toISOString();
-    await updateAuditRun(run.id, {
-      status: "complete",
-      source_document_count: csvDocuments.length,
-      finding_count: findings.length,
-      potential_recovery_cents: potentialRecoveryCents,
-      completed_at: now,
-      updated_at: now,
-    });
-    await updateAuditRequest(requestId, {
-      status: "complete",
-      updated_at: now,
-    });
+    const potentialRecoveryCents =
+      conservativePotentialRecoveryCents(findings);
+    const { data: completed, error: completeError } = await supabase.rpc(
+      "billguarded_complete_audit_work",
+      {
+        p_request_id: claim.auditRequestId,
+        p_run_id: claim.runId,
+        p_claim_token: claim.claimToken,
+        p_source_document_count: csvDocuments.length,
+        p_finding_count: findings.length,
+        p_potential_recovery_cents: potentialRecoveryCents,
+      },
+    );
+    if (completeError) throw completeError;
+    if (!completed) throw new Error("audit_work_claim_lost");
+
+    return { state: "complete" };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message.slice(0, 500) : "unknown_error";
-    const inputFailure = deterministicInputError(message);
-
-    await safelyRecordFailure({
-      runId: run.id,
-      requestId,
-      status: inputFailure ? "needs_review" : "failed",
-      errorCode: inputFailure
-        ? "structured_data_invalid"
-        : "audit_engine_failed",
-      message,
-    });
-
-    if (!inputFailure) throw error;
+    if (
+      error instanceof Error &&
+      error.message === "audit_work_claim_lost"
+    ) {
+      throw error;
+    }
+    return failClaimedWork(claim, error);
   }
 }
