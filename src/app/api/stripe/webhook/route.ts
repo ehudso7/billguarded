@@ -1,6 +1,5 @@
 import type Stripe from "stripe";
-import { after, NextResponse } from "next/server";
-import { processAuditRequestWithRetry } from "@/lib/audit-processing";
+import { NextResponse } from "next/server";
 import {
   isOfferId,
   type OfferId,
@@ -31,6 +30,9 @@ async function registerEvent(event: Stripe.Event) {
       event_id: event.id,
       event_type: event.type,
       stripe_created_at: new Date(event.created * 1000).toISOString(),
+      livemode: event.livemode,
+      stripe_object_id:
+        "id" in event.data.object ? event.data.object.id : null,
       processed: false,
     },
     { onConflict: "event_id", ignoreDuplicates: true },
@@ -71,8 +73,11 @@ function stripeId(
 
 function checkoutIsPaid(session: Stripe.Checkout.Session) {
   return (
-    session.payment_status === "paid" ||
-    session.payment_status === "no_payment_required"
+    session.livemode &&
+    session.mode === "payment" &&
+    session.payment_status === "paid" &&
+    session.currency === "usd" &&
+    session.amount_total === 150_000
   );
 }
 
@@ -162,7 +167,10 @@ async function subscriptionIdFromInvoice(invoice: Stripe.Invoice) {
   return stripeId(parent.subscription_details?.subscription);
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(
+  eventId: string,
+  session: Stripe.Checkout.Session,
+) {
   if (!checkoutIsPaid(session)) return null;
 
   const customerId = stripeId(session.customer);
@@ -176,6 +184,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (!customerId) {
     throw new Error("checkout_customer_missing");
+  }
+
+  if (!session.livemode) {
+    throw new Error("live_checkout_required");
+  }
+
+  if (metadataOffer !== "audit_90_day") {
+    throw new Error("continuous_monitor_checkout_disabled");
   }
 
   await upsertCustomer(
@@ -207,20 +223,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     currentPeriodEnd,
   });
 
-  const { error } = await supabaseAdmin()
-    .from("audit_requests")
-    .update({
-      status: "paid",
-      stripe_customer_id: customerId,
-      stripe_checkout_session_id: session.id,
-      selected_offer: metadataOffer,
-      paid_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", requestId);
+  const { data: recorded, error } = await supabaseAdmin().rpc(
+    "billguarded_record_paid_audit",
+    {
+      p_event_id: eventId,
+      p_request_id: requestId,
+      p_checkout_session_id: session.id,
+      p_customer_id: customerId,
+      p_offer: metadataOffer,
+      p_livemode: session.livemode,
+      p_paid_at: new Date(session.created * 1000).toISOString(),
+    },
+  );
 
   if (error) throw error;
-  return requestId;
+  if (!recorded) throw new Error("paid_audit_not_recorded");
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -244,16 +261,6 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
     status: "past_due",
     subscriptionId,
     currentPeriodEnd: periodEnd(subscription),
-  });
-}
-
-function scheduleAudit(requestId: string) {
-  after(async () => {
-    try {
-      await processAuditRequestWithRetry(requestId);
-    } catch (error) {
-      console.error("billguarded_audit_processing_failed", requestId, error);
-    }
   });
 }
 
@@ -297,10 +304,10 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed":
       case "checkout.session.async_payment_succeeded": {
-        const requestId = await handleCheckoutCompleted(
+        await handleCheckoutCompleted(
+          event.id,
           event.data.object as Stripe.Checkout.Session,
         );
-        if (requestId) scheduleAudit(requestId);
         break;
       }
       case "customer.subscription.created":

@@ -1,69 +1,57 @@
-import { processAuditRequest } from "@/lib/audit-engine";
-import { withRetry } from "@/lib/retry";
+import {
+  processClaimedAuditWork,
+  type AuditWorkClaim,
+  type AuditWorkResult,
+} from "@/lib/audit-engine";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-const RETRY_DELAYS_MS = [0, 1000, 3000, 8000, 15000] as const;
+type AuditClaimRow = {
+  audit_request_id: string;
+  run_id: string;
+  claim_token: string;
+  attempt_number: number;
+};
 
-async function verifyAuditProcessingState(requestId: string) {
-  const supabase = supabaseAdmin();
-  const [{ data: request, error: requestError }, { data: run, error: runError }] =
-    await Promise.all([
-      supabase
-        .from("audit_requests")
-        .select("status")
-        .eq("id", requestId)
-        .maybeSingle(),
-      supabase
-        .from("audit_runs")
-        .select("status,error_code")
-        .eq("audit_request_id", requestId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+export type AuditSweepResult =
+  | { state: "idle" }
+  | ({
+      state: "complete" | "retryable" | "permanently_failed";
+      auditRequestId: string;
+      attemptNumber: number;
+    } & Pick<AuditWorkResult, "errorCode">);
 
-  if (requestError) throw requestError;
-  if (runError) throw runError;
-  if (!request) return;
-
-  if (request.status === "complete" || run?.status === "complete") return;
-  if (run?.status === "needs_review") return;
-  if (request.status === "cancelled") return;
-
-  if (run?.status === "failed") {
-    throw new Error(run.error_code || "audit_run_failed");
-  }
-
-  if (
-    request.status === "paid" ||
-    request.status === "processing" ||
-    run?.status === "queued" ||
-    run?.status === "processing"
-  ) {
-    throw new Error("audit_processing_in_progress");
-  }
-}
-
-export async function processAuditRequestWithRetry(requestId: string) {
-  await withRetry(
-    async () => {
-      await processAuditRequest(requestId);
-      await verifyAuditProcessingState(requestId);
-    },
+export async function claimAuditWork(
+  workerId: string,
+): Promise<AuditWorkClaim | null> {
+  const { data, error } = await supabaseAdmin().rpc(
+    "billguarded_claim_audit_work",
     {
-      delaysMs: RETRY_DELAYS_MS,
-      onAttemptFailure(error, attempt, final) {
-        console.warn(
-          final
-            ? "billguarded_audit_retry_exhausted"
-            : "billguarded_audit_retry",
-          requestId,
-          attempt,
-          error instanceof Error
-            ? error.message.slice(0, 160)
-            : "unknown_error",
-        );
-      },
+      p_worker_id: workerId,
+      p_lease_seconds: 360,
     },
   );
+  if (error) throw error;
+
+  const row = ((data ?? []) as AuditClaimRow[])[0];
+  if (!row) return null;
+
+  return {
+    auditRequestId: row.audit_request_id,
+    runId: row.run_id,
+    claimToken: row.claim_token,
+    attemptNumber: row.attempt_number,
+  };
+}
+export async function sweepOneAuditWork(
+  workerId: string,
+): Promise<AuditSweepResult> {
+  const claim = await claimAuditWork(workerId);
+  if (!claim) return { state: "idle" };
+
+  const result = await processClaimedAuditWork(claim);
+  return {
+    ...result,
+    auditRequestId: claim.auditRequestId,
+    attemptNumber: claim.attemptNumber,
+  };
 }

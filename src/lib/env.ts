@@ -17,8 +17,21 @@ const supabaseServerSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1),
 });
 
+const fulfillmentWorkerSchema = z.object({
+  CRON_SECRET: z.string().min(32),
+});
+
+const resendServerSchema = z.object({
+  RESEND_API_KEY: z.string().startsWith("re_").min(16),
+  RESEND_WEBHOOK_SECRET: z.string().startsWith("whsec_").min(20),
+});
+
 let cachedStripe: z.infer<typeof stripeServerSchema> | undefined;
 let cachedSupabase: z.infer<typeof supabaseServerSchema> | undefined;
+let cachedFulfillmentWorker:
+  | z.infer<typeof fulfillmentWorkerSchema>
+  | undefined;
+let cachedResend: z.infer<typeof resendServerSchema> | undefined;
 
 export function stripeServerEnv() {
   if (!cachedStripe) {
@@ -58,4 +71,25 @@ export function publicSupabaseEnv() {
     });
 
   return parsed;
+}
+
+export function fulfillmentWorkerEnv() {
+  if (!cachedFulfillmentWorker) {
+    cachedFulfillmentWorker = fulfillmentWorkerSchema.parse({
+      CRON_SECRET: process.env.CRON_SECRET,
+    });
+  }
+
+  return cachedFulfillmentWorker;
+}
+
+export function resendServerEnv() {
+  if (!cachedResend) {
+    cachedResend = resendServerSchema.parse({
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    });
+  }
+
+  return cachedResend;
 }

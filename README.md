@@ -48,7 +48,8 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 4. Apply the migrations in `supabase/migrations/` in version order.
 5. Store the Stripe webhook signing secret in Supabase Vault under the existing compatibility secret name used by production; never commit or log it.
 6. Configure the Stripe webhook endpoint as `https://billguarded.com/api/stripe/webhook` and subscribe it to the required Checkout, subscription, and invoice events documented in the webhook handler.
-7. Run `npm ci`, then `npm run check` before deployment.
+7. Configure server-only `CRON_SECRET`, `RESEND_API_KEY`, and `RESEND_WEBHOOK_SECRET` values. Register `https://billguarded.com/api/resend/webhook` only for the transactional lifecycle events in the durable fulfillment runbook.
+8. Run `npm ci`, then `npm run check` before deployment.
 
 ## Security model
 
@@ -98,7 +99,7 @@ CI runs on pull requests and pushes to `main` and includes:
 - Node 22 unit tests for CSV parsing, conservative recovery math, retry scheduling, and stale-worker recovery
 - production Next.js build
 
-Paid audit execution uses bounded retries and verifies that the request reaches a safe terminal state. A stale processing worker is recovered with a compare-and-update guard so a concurrently completed run cannot be overwritten. Partial findings from a failed attempt are removed before a fresh attempt begins.
+Paid audit execution is claimed from Postgres by an independently scheduled, bearer-protected Vercel worker. Payment evidence, processing attempts, leases, retries, stale recovery, terminal failures, customer-delivery claims, provider acceptance, and Resend lifecycle events remain durable across serverless invocations. Partial findings from an interrupted or failed attempt are removed before a fresh attempt begins. An uncertain provider outcome is quarantined for operator reconciliation and is never blindly resent.
 
 The `/api/health` endpoint verifies that the production application can reach the database, reports the deployed Vercel Git commit for release certification, and returns `503` when the database dependency is unavailable.
 
@@ -107,7 +108,7 @@ The `Production Smoke` workflow runs after each `main` deployment and daily. For
 - application and database health
 - public pages, legal pages, private recovery page, robots, and sitemap
 - security headers
-- fail-closed behavior for unsigned webhooks and malformed intake, Checkout, and recovery requests
+- fail-closed behavior for unsigned Stripe/Resend webhooks, an unauthenticated fulfillment worker, and malformed intake, Checkout, and recovery requests
 - noindex/nofollow behavior on the recovery surface
 
 ## Customer-facing trust pages

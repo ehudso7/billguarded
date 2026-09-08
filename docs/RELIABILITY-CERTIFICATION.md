@@ -4,14 +4,15 @@ This document records the final reliability gate added after the August 2026 pro
 
 ## Required behavior
 
-- Both the signed Stripe webhook and the post-Checkout return path may request audit execution without creating duplicate active workers.
-- A transient audit-engine failure is retried on a bounded schedule.
-- A retry does not count a still-running worker as a successful terminal outcome.
-- A paid request with an orphaned processing run can be recovered after a short grace period.
-- A normally processing request is not reclaimed until the longer stale-worker threshold is reached.
-- Stale-worker recovery uses a compare-and-update guard so a concurrently completed run is never overwritten.
-- Findings attached to a failed attempt are removed before a fresh attempt is created.
-- Complete and needs-review runs remain terminal and are never rerun automatically.
+- Only a signed live Stripe event can durably record paid audit work. The browser return path cannot schedule production processing.
+- Vercel Cron invokes the protected sweeper independently of the original Stripe request.
+- Postgres claims one eligible audit with `FOR UPDATE SKIP LOCKED`, a unique claim token, and a bounded lease.
+- Five durable attempts use database backoff. Stale claims are recovered without another Stripe event or customer action.
+- Findings attached to an interrupted or failed attempt are removed before a fresh attempt is created.
+- Request, run, and work-item completion is one database transaction.
+- Customer delivery has a separate atomic claim and deterministic fingerprint.
+- A stale pre-send claim may retry; a provider request with an uncertain outcome is quarantined and can never auto-resend.
+- Signed Resend sent, delivered, bounced, failed, suppressed, and complained events are stored idempotently.
 
 ## Automated gates
 
@@ -21,7 +22,7 @@ The CI workflow must pass:
 2. Production dependency audit.
 3. TypeScript checking.
 4. ESLint.
-5. Unit tests, including retry scheduling and stale-worker thresholds.
+5. Unit and governance tests for deterministic reconciliation, worker authorization, payment durability, atomic-claim SQL, delivery content, provider idempotency, and uncertainty quarantine.
 6. Optimized Next.js production build.
 
 ## Production certification
@@ -32,5 +33,8 @@ After merge, verify:
 2. Vercel reports the production deployment ready.
 3. `/api/health` reports the application and database ready.
 4. Vercel shows no new production runtime error cluster.
-5. Supabase has no errored Stripe event and no paid audit stranded in processing.
-6. A controlled sandbox payment still reaches the expected audit result without a second charge.
+5. Supabase has no errored Stripe event, no unexpected live work selection, and no fulfillment incident.
+6. The protected worker rejects an unauthenticated request and the Resend endpoint rejects an unsigned request.
+7. No production customer is used as a test fixture. The first genuine paid audit remains the first live-money end-to-end proof.
+
+See [the durable fulfillment runbook](./DURABLE-FULFILLMENT.md) for the exact state machines, retry schedule, escalation query, provider-reconciliation procedure, and rollout order.
