@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FunnelPageView, TrackedAnchor } from "@/app/funnel-tracker";
 import { OFFERS } from "@/lib/offers";
 
 export const metadata: Metadata = {
@@ -79,6 +80,7 @@ export default function ThreePlInvoiceAuditPage() {
 
   return (
     <main>
+      <FunnelPageView eventName="landing_view" path="/3pl-invoice-audit" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -119,12 +121,14 @@ export default function ThreePlInvoiceAuditPage() {
             <Link className="button" href="/demo">
               Inspect a synthetic audit
             </Link>
-            <a
+            <TrackedAnchor
               className="button"
               href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              eventName="fit_check_click"
+              path="/3pl-invoice-audit"
             >
               Ask for a free fit check
-            </a>
+            </TrackedAnchor>
           </div>
         </section>
 
@@ -308,12 +312,14 @@ export default function ThreePlInvoiceAuditPage() {
               <Link className="button primary" href="/start">
                 Start the {audit.priceLabel} audit →
               </Link>
-              <a
+              <TrackedAnchor
                 className="button"
                 href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+                eventName="fit_check_click"
+                path="/3pl-invoice-audit"
               >
                 Ask for a free fit check
-              </a>
+              </TrackedAnchor>
             </div>
           </div>
         </section>

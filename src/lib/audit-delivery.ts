@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import {
   AUDIT_COMPLETION_SUBJECT,
   AUDIT_COMPLETION_TEMPLATE_VERSION,
@@ -55,6 +56,24 @@ async function recordDeliveryFailure(input: {
   );
   if (error) throw error;
 
+  try {
+    await recordAuditFunnelEvent({
+      auditRequestId: input.claim.audit_request_id,
+      eventName: "delivery_failed",
+      dedupePart: `${input.claim.delivery_id}:${input.claim.claim_token}`,
+      outcome: input.retryable ? "retryable" : "terminal",
+    });
+  } catch (analyticsError) {
+    console.error(
+      "delivery_failure_funnel_event_failed",
+      analyticsError &&
+        typeof analyticsError === "object" &&
+        "code" in analyticsError
+        ? String(analyticsError.code).slice(0, 80)
+        : "unknown_error",
+    );
+  }
+
   return {
     state: data === "retryable" ? "retryable" : "failed",
     deliveryId: input.claim.delivery_id,
@@ -106,6 +125,22 @@ async function persistProviderAcceptance(
       },
     );
     if (!error && data === true) {
+      try {
+        await recordAuditFunnelEvent({
+          auditRequestId: claim.audit_request_id,
+          eventName: "customer_notified",
+          dedupePart: claim.delivery_id,
+        });
+      } catch (analyticsError) {
+        console.error(
+          "customer_notification_funnel_event_failed",
+          analyticsError &&
+            typeof analyticsError === "object" &&
+            "code" in analyticsError
+            ? String(analyticsError.code).slice(0, 80)
+            : "unknown_error",
+        );
+      }
       return { state: "accepted", deliveryId: claim.delivery_id };
     }
     lastError = error;

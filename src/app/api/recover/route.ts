@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import {
   createPortalCookie,
   portalCookieName,
@@ -64,6 +65,24 @@ export async function POST(request: Request) {
 
   if (error || !audit || audit.status === "cancelled") {
     return protectedJson({ error: "recovery_unavailable" }, { status: 404 });
+  }
+
+  try {
+    await recordAuditFunnelEvent({
+      auditRequestId: audit.id,
+      eventName: "report_recovery_opened",
+      dedupePart: "first_verified_recovery",
+      path: "/recover",
+    });
+  } catch (analyticsError) {
+    console.error(
+      "recovery_funnel_event_failed",
+      analyticsError &&
+        typeof analyticsError === "object" &&
+        "code" in analyticsError
+        ? String(analyticsError.code).slice(0, 80)
+        : "unknown_error",
+    );
   }
 
   const cookie = createPortalCookie(customerId);

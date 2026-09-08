@@ -1,7 +1,11 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  captureFunnelEvent,
+  currentAttribution,
+} from "@/lib/funnel-client";
 
 type IntakeResponse = { requestId: string; accessToken: string };
 type SignedUploadResponse = {
@@ -37,12 +41,35 @@ function validateCsvFile(file: File) {
   }
 }
 
-export default function IntakeForm() {
+export default function IntakeForm(props: {
+  initialMessage?: string;
+  checkoutCancelled?: boolean;
+}) {
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [invoiceFiles, setInvoiceFiles] = useState<File[]>([]);
-  const [status, setStatus] = useState("Ready.");
+  const [status, setStatus] = useState(props.initialMessage ?? "Ready.");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const started = useRef(false);
+  const stage = useRef<"idle" | "intake" | "upload" | "checkout">("idle");
+  const statusRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (props.checkoutCancelled) {
+      void captureFunnelEvent("checkout_abandoned", "/start");
+    }
+  }, [props.checkoutCancelled]);
+
+  function markStarted() {
+    if (started.current) return;
+    started.current = true;
+    void captureFunnelEvent("intake_started", "/start");
+  }
+
+  function showError(message: string) {
+    setError(message);
+    window.requestAnimationFrame(() => statusRef.current?.focus());
+  }
 
   const supabase = useMemo(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -106,11 +133,11 @@ export default function IntakeForm() {
     setError(null);
 
     if (!contractFile) {
-      setError("Add the CSV contract or rate card first.");
+      showError("Add the CSV contract or rate card first.");
       return;
     }
     if (invoiceFiles.length === 0) {
-      setError("Add at least one CSV invoice.");
+      showError("Add at least one CSV invoice.");
       return;
     }
 
@@ -118,15 +145,17 @@ export default function IntakeForm() {
     try {
       selectedFiles.forEach(validateCsvFile);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Use CSV files only.");
+      showError(caught instanceof Error ? caught.message : "Use CSV files only.");
+      void captureFunnelEvent("unsupported_file_rejected", "/start");
       return;
     }
 
     const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_TOTAL_BYTES) {
-      setError(
+      showError(
         "The combined upload is larger than 50 MB. Split the audit into a smaller supported file set before paying.",
       );
+      void captureFunnelEvent("unsupported_file_rejected", "/start");
       return;
     }
 
@@ -134,6 +163,7 @@ export default function IntakeForm() {
     setBusy(true);
 
     try {
+      stage.current = "intake";
       setStatus("Creating your private audit workspace…");
       const intake = await jsonOrThrow<IntakeResponse>(
         await fetch("/api/intake", {
@@ -145,10 +175,12 @@ export default function IntakeForm() {
             monthly3plSpend: Number(form.get("monthly3plSpend")),
             invoiceCount: Number(form.get("invoiceCount")),
             termsAccepted: form.get("termsAccepted") === "on",
+            attribution: currentAttribution(),
           }),
         }),
       );
 
+      stage.current = "upload";
       setStatus("Uploading contract or rate card…");
       await uploadDocument(
         intake.requestId,
@@ -169,6 +201,7 @@ export default function IntakeForm() {
         );
       }
 
+      stage.current = "checkout";
       setStatus("Validating structured USD billing data before payment…");
       const checkout = await jsonOrThrow<CheckoutResponse>(
         await fetch("/api/stripe/checkout", {
@@ -184,18 +217,24 @@ export default function IntakeForm() {
 
       window.location.assign(checkout.url);
     } catch (caught) {
-      setError(
+      showError(
         caught instanceof Error
           ? caught.message
           : "Something went wrong. Please try again.",
       );
+      if (stage.current === "upload") {
+        void captureFunnelEvent("upload_failed", "/start");
+      } else if (stage.current === "checkout") {
+        void captureFunnelEvent("checkout_creation_failed", "/start");
+      }
+      stage.current = "idle";
       setStatus("Stopped before payment.");
       setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} onFocusCapture={markStarted}>
       <div className="form-grid">
         <div className="field full">
           <label htmlFor="company">Company</label>
@@ -205,6 +244,7 @@ export default function IntakeForm() {
             required
             minLength={2}
             autoComplete="organization"
+            aria-describedby="intake-status"
           />
         </div>
         <div className="field full">
@@ -215,6 +255,7 @@ export default function IntakeForm() {
             type="email"
             required
             autoComplete="email"
+            aria-describedby="intake-status"
           />
         </div>
         <div className="field">
@@ -227,6 +268,7 @@ export default function IntakeForm() {
             step="100"
             inputMode="numeric"
             required
+            aria-describedby="intake-status"
           />
         </div>
         <div className="field">
@@ -239,6 +281,7 @@ export default function IntakeForm() {
             max="10000"
             inputMode="numeric"
             required
+            aria-describedby="intake-status"
           />
         </div>
         <div className="field full">
@@ -249,12 +292,33 @@ export default function IntakeForm() {
               type="file"
               accept={ACCEPT}
               required
-              onChange={(event) =>
-                setContractFile(event.target.files?.[0] ?? null)
-              }
+              aria-describedby="contract-help intake-status"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                if (file) {
+                  try {
+                    validateCsvFile(file);
+                  } catch (caught) {
+                    showError(
+                      caught instanceof Error
+                        ? caught.message
+                        : "Use a supported CSV file.",
+                    );
+                    void captureFunnelEvent(
+                      "unsupported_file_rejected",
+                      "/start",
+                    );
+                    event.target.value = "";
+                    setContractFile(null);
+                    return;
+                  }
+                }
+                setError(null);
+                setContractFile(file);
+              }}
             />
           </div>
-          <span className="field-help">
+          <span className="field-help" id="contract-help">
             Include a service/fee code and agreed unit rate. All monetary amounts must be USD. If the file contains a currency column, use USD. One file, up to 20 MB.
           </span>
         </div>
@@ -267,16 +331,36 @@ export default function IntakeForm() {
               accept={ACCEPT}
               multiple
               required
+              aria-describedby="invoice-help intake-status"
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
                 if (files.length > 10) {
-                  setError("An audit can include at most 10 invoice CSV files.");
+                  showError("An audit can include at most 10 invoice CSV files.");
+                  void captureFunnelEvent(
+                    "unsupported_file_rejected",
+                    "/start",
+                  );
+                } else {
+                  try {
+                    files.forEach(validateCsvFile);
+                    setError(null);
+                  } catch (caught) {
+                    showError(
+                      caught instanceof Error
+                        ? caught.message
+                        : "Use supported CSV files only.",
+                    );
+                    void captureFunnelEvent(
+                      "unsupported_file_rejected",
+                      "/start",
+                    );
+                  }
                 }
                 setInvoiceFiles(files.slice(0, 10));
               }}
             />
           </div>
-          <span className="field-help">
+          <span className="field-help" id="invoice-help">
             Best results include a reference/order ID, service code, quantity,
             unit rate, and line total. Monetary amounts must be USD; a declared
             non-USD currency is rejected before payment. All selected files
@@ -290,6 +374,7 @@ export default function IntakeForm() {
               name="termsAccepted"
               type="checkbox"
               required
+              aria-describedby="intake-status"
             />
             <span>
               I confirm I am authorized to upload these business records, all
@@ -312,7 +397,13 @@ export default function IntakeForm() {
       <button className="button primary" type="submit" disabled={busy}>
         {busy ? "Preparing secure checkout…" : "Upload and continue to Stripe →"}
       </button>
-      <p className={`status ${error ? "error" : ""}`} aria-live="polite">
+      <p
+        className={`status ${error ? "error" : ""}`}
+        id="intake-status"
+        ref={statusRef}
+        role={error ? "alert" : "status"}
+        tabIndex={-1}
+      >
         {error || status}
       </p>
     </form>

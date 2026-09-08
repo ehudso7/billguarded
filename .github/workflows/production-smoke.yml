@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /start /recover /privacy /terms /security /robots.txt /sitemap.xml; do
+          for path in / /3pl-invoice-audit /demo /start /recover /privacy /terms /security /robots.txt /sitemap.xml; do
             code="$(curl --silent --show-error --location --max-time 20 \
               --output /dev/null --write-out '%{http_code}' \
               "$BASE_URL$path" || true)"
@@ -143,6 +143,44 @@ jobs:
             echo "Invalid checkout returned HTTP $checkout_code instead of 400"
             exit 1
           }
+
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            analytics_code="$(curl --silent --show-error --max-time 20 \
+              --request POST --header 'Content-Type: application/json' \
+              --data '{}' --output /dev/null --write-out '%{http_code}' \
+              "$BASE_URL/api/analytics/events" || true)"
+            [[ "$analytics_code" == "403" ]] || {
+              echo "Cross-origin analytics request returned HTTP $analytics_code instead of 403"
+              exit 1
+            }
+          fi
+
+      - name: Verify canonical and private-route index controls
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - "$BASE_URL" <<'PY'
+          import re
+          import sys
+          import urllib.request
+
+          base = sys.argv[1]
+          canonicals = {
+              "/privacy": "/privacy",
+              "/terms": "/terms",
+              "/security": "/security",
+          }
+          for path, canonical in canonicals.items():
+              body = urllib.request.urlopen(base + path, timeout=20).read().decode("utf-8")
+              assert f'rel="canonical" href="{base}{canonical}"' in body, path
+
+          for path in ("/start", "/success", "/recover"):
+              body = urllib.request.urlopen(base + path, timeout=20).read().decode("utf-8").lower()
+              robots = re.search(r'<meta name="robots" content="([^"]+)"', body)
+              assert robots and "noindex" in robots.group(1) and "nofollow" in robots.group(1), path
+          PY
 
       - name: Verify durable fulfillment APIs fail closed
         if: github.event_name != 'pull_request'

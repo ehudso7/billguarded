@@ -5,6 +5,7 @@ import RecoveryClient from "./recovery-client";
 export const metadata: Metadata = {
   title: "Recover audit access — BillGuarded",
   description: "Private BillGuarded audit access recovery.",
+  alternates: { canonical: "/recover" },
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

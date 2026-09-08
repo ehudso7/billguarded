@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Privacy — BillGuarded",
   description: "How BillGuarded handles audit, billing, and contact data.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
@@ -20,7 +22,7 @@ export default function PrivacyPage() {
       <article className="legal-card">
         <span className="eyebrow">Privacy</span>
         <h1>Privacy at BillGuarded</h1>
-        <p>Last updated: August 25, 2026.</p>
+        <p>Last updated: September 8, 2026.</p>
 
         <h2>Information we process</h2>
         <p>
@@ -40,6 +42,17 @@ export default function PrivacyPage() {
           prevent abuse, and operate and improve the service. We do not use a
           customer&apos;s uploaded invoices or rate cards to make unsupported
           accusations or guarantee a recovery.
+        </p>
+
+        <h2>Privacy-safe product measurement</h2>
+        <p>
+          BillGuarded records a limited first-party funnel ledger so we can see
+          whether visitors reach the demo, intake, upload, Checkout, audit, and
+          delivery stages. This ledger uses a one-way hash of a random browser
+          identifier and allowlisted source labels. It does not store invoice
+          or rate-card contents, filenames, CSV rows, raw email addresses,
+          company fields, Checkout Session IDs, Stripe customer IDs, recovery
+          credentials, URL query strings, or URL fragments.
         </p>
 
         <h2>Service providers</h2>
