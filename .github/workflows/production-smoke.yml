@@ -144,6 +144,12 @@ jobs:
             exit 1
           }
 
+      - name: Verify durable fulfillment APIs fail closed
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
           worker_code="$(curl --silent --show-error --max-time 20 \
             --output /dev/null --write-out '%{http_code}' \
             "$BASE_URL/api/internal/fulfillment-sweep" || true)"
