@@ -22,7 +22,7 @@
     "react-dom": "19.2.8",
     "resend": "6.26.0",
     "stripe": "22.5.0",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "26.2.0",
