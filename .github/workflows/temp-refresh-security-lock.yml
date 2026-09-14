@@ -1,0 +1,36 @@
+name: Temporary security lock refresh
+
+on:
+  push:
+    branches:
+      - fix/domain-email-identity-guard
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/domain-email-identity-guard
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Refresh patched framework dependency graph
+        run: npm install --save-exact next@16.3.4 eslint-config-next@16.3.4 --package-lock-only --ignore-scripts --no-fund
+      - name: Verify production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit generated lockfile
+        run: |
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: patch Next.js dependency chain"
+          git push origin HEAD:fix/domain-email-identity-guard
