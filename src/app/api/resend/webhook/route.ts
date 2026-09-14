@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   AUDIT_COMPLETION_SUBJECT,
+  BILLGUARDED_SUPPORT_EMAIL,
   BILLGUARDED_SUPPORT_SENDER,
 } from "@/lib/audit-delivery-email";
 import { resendServerEnv } from "@/lib/env";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
 
   if (
     event.data.from !== BILLGUARDED_SUPPORT_SENDER &&
-    event.data.from !== "support@billguarded.com"
+    event.data.from !== BILLGUARDED_SUPPORT_EMAIL
   ) {
     return noStore({ received: true, ignored: true });
   }
