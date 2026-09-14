@@ -113,6 +113,9 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   const reportUrl = params.request
     ? `/api/audit-report?request=${encodeURIComponent(params.request)}`
     : null;
+  const recoveryPacketUrl = params.request
+    ? `/api/recovery-packet?request=${encodeURIComponent(params.request)}`
+    : null;
 
   return (
     <main className="center-page">
@@ -208,10 +211,15 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
             >
               Contact support
             </a>
-          ) : complete && reportUrl ? (
-            <a className="button primary" href={reportUrl}>
-              Download findings CSV
-            </a>
+          ) : complete && reportUrl && recoveryPacketUrl ? (
+            <>
+              <a className="button primary" href={recoveryPacketUrl}>
+                Download recovery review draft
+              </a>
+              <a className="button" href={reportUrl}>
+                Download findings CSV
+              </a>
+            </>
           ) : (
             <Link className="button primary" href="/">
               Return home

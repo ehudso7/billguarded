@@ -29,7 +29,7 @@ export const OFFERS: Record<OfferId, Offer> = {
       "Invoice-line discrepancy analysis",
       "Duplicate and unsupported charge checks",
       "Evidence-linked findings",
-      "Downloadable findings report",
+      "Downloadable findings and recovery-review draft",
     ],
     mode: "payment",
     priceEnv: "STRIPE_PRICE_AUDIT_90_DAY",

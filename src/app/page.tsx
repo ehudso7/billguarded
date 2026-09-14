@@ -66,8 +66,9 @@ export default function HomePage() {
           <div className="proof-item">
             <strong>3. Review</strong>
             <span>
-              Findings stay tied to source rows and recovery totals are kept
-              conservative to avoid double counting.
+              Findings stay tied to source rows, recovery totals remain
+              conservative, and a human-reviewed recovery draft turns the
+              result into a next action.
             </span>
           </div>
         </section>
@@ -79,7 +80,8 @@ export default function HomePage() {
             <p>
               No percentage-of-recovery fee and no recovery guarantee. The
               production flow charges only after supported USD CSV files have
-              uploaded and validated.
+              uploaded and validated. Nothing is submitted to a 3PL
+              automatically.
             </p>
           </div>
 

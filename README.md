@@ -18,6 +18,12 @@ The current deterministic engine accepts one CSV contract/rate card plus up to 1
 - Conservative potential-recovery aggregation that avoids double counting multiple findings on the same source row
 
 Findings require operational review and do not guarantee refunds, credits, or recoveries.
+Completed paid audits also produce a deterministic Recovery Review Draft with
+source-row citations and an explicit human-approval checklist. BillGuarded does
+not send or submit that draft automatically.
+
+The portfolio-level evidence-to-outcome architecture is documented in
+[`docs/RECOVERY-TWIN.md`](docs/RECOVERY-TWIN.md).
 
 ## Stack
 
