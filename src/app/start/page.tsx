@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import IntakeForm from "./intake-form";
+import { OFFERS, type OfferId } from "@/lib/offers";
 
 export const metadata: Metadata = {
-  title: "Start a 90-Day 3PL Invoice Audit | BillGuarded",
+  title: "Start a 3PL Invoice Audit | BillGuarded",
   description:
-    "Upload one supported CSV rate card and up to 10 CSV invoices before opening secure checkout for the $1,500 BillGuarded audit.",
+    "Start with a $299 one-invoice Evidence Check or run the $1,500 Full 90-Day Audit after supported CSV inputs validate.",
   alternates: { canonical: "/start" },
   robots: { index: false, follow: false },
 };
 
 type StartPageProps = {
-  searchParams: Promise<{ cancelled?: string; error?: string }>;
+  searchParams: Promise<{ cancelled?: string; error?: string; offer?: string }>;
 };
 
 function startMessage(params: { cancelled?: string; error?: string }) {
@@ -26,6 +27,11 @@ function startMessage(params: { cancelled?: string; error?: string }) {
 
 export default async function StartPage({ searchParams }: StartPageProps) {
   const params = await searchParams;
+  const initialOffer: OfferId =
+    params.offer === "audit_90_day" ? "audit_90_day" : "evidence_check";
+  const offer = OFFERS[initialOffer];
+  const invoiceLimit = initialOffer === "evidence_check" ? "exactly one" : "up to 10";
+
   return (
     <main>
       <div className="form-shell">
@@ -40,17 +46,17 @@ export default async function StartPage({ searchParams }: StartPageProps) {
         </nav>
 
         <section className="form-card">
-          <span className="eyebrow">Start the reconciliation</span>
-          <h1>Upload your rate card and invoices. Check four deterministic billing discrepancies.</h1>
+          <span className="eyebrow">{offer.name}</span>
+          <h1>Upload your rate card and invoice data. Check four deterministic billing discrepancies.</h1>
           <p>
-            Production audits currently use structured CSV files so every
-            finding can be reproduced deterministically. Upload one CSV
-            contract or rate card plus up to 10 CSV invoices. Files remain in
-            private storage and Stripe Checkout does not open until the upload
-            is complete and validated.
+            BillGuarded uses structured CSV files so every finding can be
+            reproduced deterministically. Upload one CSV contract or rate card
+            plus {invoiceLimit} CSV invoice{initialOffer === "evidence_check" ? "" : "s"}.
+            Files remain in private storage and Stripe Checkout does not open
+            until the upload is complete and validated.
           </p>
           <div className="audit-scope" aria-label="Deterministic audit checks">
-            <strong>The $1,500 one-time audit checks:</strong>
+            <strong>{offer.priceLabel} {offer.name} checks:</strong>
             <ul>
               <li>Duplicate charges</li>
               <li>Unsupported service or fee codes</li>
@@ -61,6 +67,7 @@ export default async function StartPage({ searchParams }: StartPageProps) {
           <IntakeForm
             initialMessage={startMessage(params)}
             checkoutCancelled={params.cancelled === "1"}
+            initialOffer={initialOffer}
           />
           <section className="after-payment" aria-labelledby="after-payment-title">
             <h2 id="after-payment-title">What happens after payment</h2>
