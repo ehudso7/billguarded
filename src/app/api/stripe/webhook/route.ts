@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
 import {
+  OFFERS,
   isOfferId,
   type OfferId,
 } from "@/lib/offers";
@@ -72,13 +73,29 @@ function stripeId(
   return typeof value === "string" ? value : value.id;
 }
 
-function checkoutIsPaid(session: Stripe.Checkout.Session) {
+function checkoutIsPaid(
+  session: Stripe.Checkout.Session,
+  offer: OfferId,
+) {
+  const rawCredit = session.metadata?.credit_amount_cents ?? "0";
+  const creditAmount = Number.parseInt(rawCredit, 10);
+  const allowedCredit =
+    offer === "audit_90_day" ? OFFERS.evidence_check.priceCents : 0;
+
+  if (
+    !Number.isInteger(creditAmount) ||
+    creditAmount < 0 ||
+    creditAmount > allowedCredit
+  ) {
+    return false;
+  }
+
   return (
     session.livemode &&
     session.mode === "payment" &&
     session.payment_status === "paid" &&
     session.currency === "usd" &&
-    session.amount_total === 150_000
+    session.amount_total === OFFERS[offer].priceCents - creditAmount
   );
 }
 
@@ -172,8 +189,6 @@ async function handleCheckoutCompleted(
   eventId: string,
   session: Stripe.Checkout.Session,
 ) {
-  if (!checkoutIsPaid(session)) return null;
-
   const customerId = stripeId(session.customer);
   const requestId = session.metadata?.request_id;
   const metadataOffer = session.metadata?.offer;
@@ -183,6 +198,8 @@ async function handleCheckoutCompleted(
     return null;
   }
 
+  if (!checkoutIsPaid(session, metadataOffer)) return null;
+
   if (!customerId) {
     throw new Error("checkout_customer_missing");
   }
@@ -191,7 +208,7 @@ async function handleCheckoutCompleted(
     throw new Error("live_checkout_required");
   }
 
-  if (metadataOffer !== "audit_90_day") {
+  if (metadataOffer === "continuous_monitor") {
     throw new Error("continuous_monitor_checkout_disabled");
   }
 

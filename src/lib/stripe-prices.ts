@@ -2,6 +2,7 @@ import { stripeServerEnv } from "@/lib/env";
 import { OFFERS, offerFromPriceId, type OfferId } from "@/lib/offers";
 
 const LIVE_PRICE_IDS: Record<OfferId, string> = {
+  evidence_check: "price_1UGqXPB5mhEA8v5jNA5b62cG",
   audit_90_day: "price_1U76TJB5mhEA8v5jnP70HVCd",
   continuous_monitor: "price_1U76TRB5mhEA8v5jApmvnbDj",
 };
@@ -29,9 +30,9 @@ export function stripePriceId(offerId: OfferId) {
 }
 
 export function offerForStripePriceId(priceId: string | null | undefined) {
-  return offerFromPriceId(
-    priceId,
-    configuredPrice("audit_90_day"),
-    configuredPrice("continuous_monitor"),
-  );
+  return offerFromPriceId(priceId, {
+    evidence_check: configuredPrice("evidence_check"),
+    audit_90_day: configuredPrice("audit_90_day"),
+    continuous_monitor: configuredPrice("continuous_monitor"),
+  });
 }

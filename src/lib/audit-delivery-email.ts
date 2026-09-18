@@ -1,6 +1,6 @@
 export const AUDIT_COMPLETION_TEMPLATE_VERSION = "audit-complete-v1";
 export const AUDIT_COMPLETION_SUBJECT =
-  "Your BillGuarded 90-Day Audit is complete";
+  "Your BillGuarded audit is complete";
 
 export const BILLGUARDED_EMAIL_DOMAIN = "billguarded.com";
 export const BILLGUARDED_PROMOTIONAL_EMAIL =
@@ -41,7 +41,7 @@ export function buildAuditCompletionEmail(input: {
     replyTo: BILLGUARDED_SUPPORT_EMAIL,
     subject: AUDIT_COMPLETION_SUBJECT,
     text: [
-      "Your BillGuarded 90-Day Audit is complete.",
+      "Your BillGuarded audit is complete.",
       "",
       "Use this private recovery link to access your audit:",
       recoveryUrl,
@@ -53,7 +53,7 @@ export function buildAuditCompletionEmail(input: {
       "BillGuarded provides evidence and reconciliation software. It does not guarantee a refund, credit, reimbursement, or recovery.",
     ].join("\n"),
     html: [
-      "<p>Your BillGuarded 90-Day Audit is complete.</p>",
+      "<p>Your BillGuarded audit is complete.</p>",
       `<p><a href="${recoveryUrl}">Open your private audit workspace</a></p>`,
       "<p><strong>Do not forward this private link.</strong> It grants access to your audit workspace.</p>",
       `<p>Need help? Contact <a href="mailto:${BILLGUARDED_SUPPORT_EMAIL}">${BILLGUARDED_SUPPORT_EMAIL}</a>.</p>`,

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 const serviceSchema = {
   "@context": "https://schema.org",
   "@type": "Service",
-  name: "BillGuarded Full 90-Day 3PL Invoice Audit",
+  name: "BillGuarded 3PL Invoice Audit",
   description:
     "Deterministic reconciliation of supported structured 3PL invoice CSVs against a customer-supplied rate card, with evidence-linked potential discrepancies for operational review.",
   provider: {
@@ -35,13 +35,24 @@ const serviceSchema = {
     url: "https://billguarded.com",
   },
   areaServed: "US",
-  offers: {
-    "@type": "Offer",
-    price: "1500.00",
-    priceCurrency: "USD",
-    url: "https://billguarded.com/start",
-    availability: "https://schema.org/InStock",
-  },
+  offers: [
+    {
+      "@type": "Offer",
+      name: "Evidence Check",
+      price: "299.00",
+      priceCurrency: "USD",
+      url: "https://billguarded.com/start?offer=evidence_check",
+      availability: "https://schema.org/InStock",
+    },
+    {
+      "@type": "Offer",
+      name: "Full 90-Day Audit",
+      price: "1500.00",
+      priceCurrency: "USD",
+      url: "https://billguarded.com/start?offer=audit_90_day",
+      availability: "https://schema.org/InStock",
+    },
+  ],
 };
 
 const faqSchema = {
@@ -61,7 +72,7 @@ const faqSchema = {
       name: "Does BillGuarded take a percentage of recovered money?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. The production Full 90-Day Audit is a fixed $1,500 one-time purchase. Findings require review and BillGuarded does not guarantee refunds, credits, or recoveries.",
+        text: "No. The $299 Evidence Check and the $1,500 Full 90-Day Audit are fixed one-time purchases. The $299 Evidence Check is credited toward a Full 90-Day Audit purchased within 14 days. Findings require review and BillGuarded does not guarantee refunds, credits, or recoveries.",
       },
     },
     {
@@ -69,13 +80,14 @@ const faqSchema = {
       name: "What files are supported?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The current production audit accepts one USD-denominated CSV rate card plus up to 10 USD-denominated CSV invoices, subject to the product's file-count and size limits.",
+        text: "The $299 Evidence Check accepts one USD-denominated CSV rate card plus exactly one USD-denominated CSV invoice. The Full 90-Day Audit accepts one rate card plus up to 10 invoice CSVs, subject to file-count and size limits.",
       },
     },
   ],
 };
 
 export default function ThreePlInvoiceAuditPage() {
+  const evidenceCheck = OFFERS.evidence_check;
   const audit = OFFERS.audit_90_day;
 
   return (
@@ -100,8 +112,8 @@ export default function ThreePlInvoiceAuditPage() {
             <span className="brand-mark" aria-hidden="true" />
             BillGuarded
           </Link>
-          <Link className="nav-pill" href="/start">
-            Start the audit
+          <Link className="nav-pill" href="/start?offer=evidence_check">
+            Start with one invoice
           </Link>
         </nav>
 
@@ -115,27 +127,30 @@ export default function ThreePlInvoiceAuditPage() {
             warehouse for a credit or adjustment.
           </p>
           <div className="hero-actions">
-            <Link className="button primary" href="/start">
-              Start the {audit.priceLabel} 90-day audit →
+            <Link className="button primary" href="/start?offer=evidence_check">
+              Start the {evidenceCheck.priceLabel} Evidence Check →
+            </Link>
+            <Link className="button" href="/start?offer=audit_90_day">
+              Run the {audit.priceLabel} Full Audit
             </Link>
             <Link className="button" href="/demo">
               Inspect a synthetic audit
             </Link>
             <TrackedAnchor
               className="button"
-              href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              href="mailto:hello@billguarded.com?subject=BillGuarded%20audit%20question"
               eventName="fit_check_click"
               path="/3pl-invoice-audit"
             >
-              Ask for a free fit check
+              Ask a question
             </TrackedAnchor>
           </div>
         </section>
 
         <section className="proof-strip" aria-label="BillGuarded audit scope">
           <div className="proof-item">
-            <strong>Fixed $1,500</strong>
-            <span>One-time price for the production 90-day audit.</span>
+            <strong>$299 entry audit</strong>
+            <span>One rate card plus one invoice, with the $299 credited toward the Full Audit within 14 days.</span>
           </div>
           <div className="proof-item">
             <strong>No recovery percentage</strong>
@@ -212,13 +227,14 @@ export default function ThreePlInvoiceAuditPage() {
               <h3>Structured USD CSV audit</h3>
               <ul>
                 <li>One USD-denominated CSV rate card</li>
-                <li>Up to 10 USD-denominated CSV invoices</li>
+                <li>Exactly one invoice for the Evidence Check</li>
+                <li>Up to 10 invoice CSVs for the Full 90-Day Audit</li>
                 <li>Up to 90 days of supported billing data</li>
                 <li>50 MB combined upload cap</li>
                 <li>20 MB maximum per file</li>
               </ul>
-              <Link className="button primary" href="/start">
-                Check your files and start
+              <Link className="button primary" href="/start?offer=evidence_check">
+                Start with one invoice
               </Link>
             </article>
 
@@ -244,16 +260,17 @@ export default function ThreePlInvoiceAuditPage() {
             <span className="eyebrow">Why this pricing model</span>
             <h2>Pay for the audit. Keep the recovery decision in your hands.</h2>
             <p>
-              BillGuarded charges a fixed one-time price for the current audit.
-              It does not turn every unusual charge into an accusation, does not
-              promise a refund, and does not take a share of a later recovery.
+              BillGuarded charges fixed one-time prices for the Evidence Check
+              and Full 90-Day Audit. It does not turn every unusual charge into
+              an accusation, does not promise a refund, and does not take a share
+              of a later recovery.
             </p>
           </div>
 
           <div className="proof-strip" aria-label="BillGuarded pricing principles">
             <div className="proof-item">
-              <strong>{audit.priceLabel} one time</strong>
-              <span>No percentage-of-recovery fee.</span>
+              <strong>{evidenceCheck.priceLabel} to start</strong>
+              <span>Credited toward the {audit.priceLabel} Full Audit if purchased within 14 days.</span>
             </div>
             <div className="proof-item">
               <strong>Review required</strong>
@@ -293,8 +310,8 @@ export default function ThreePlInvoiceAuditPage() {
               <h3>Can I pay for continuous monitoring?</h3>
               <p>
                 Not yet. Paid monitoring remains disabled until recurring
-                ingestion and retention are production-ready. The $1,500
-                90-day audit is the current live offer.
+                ingestion and retention are production-ready. The $299 Evidence
+                Check and $1,500 Full 90-Day Audit are the current live offers.
               </p>
             </article>
           </div>
@@ -302,24 +319,20 @@ export default function ThreePlInvoiceAuditPage() {
 
         <section className="section">
           <div className="card highlight">
-            <span className="eyebrow">Ready to reconcile the last 90 days?</span>
-            <h2>Upload supported files first. Payment only opens after validation.</h2>
+            <span className="eyebrow">Start with one invoice</span>
+            <h2>Buy a bounded check before committing to the full 90-day scope.</h2>
             <p>
-              If your current files fit the production boundary, start the audit.
-              If you are not sure, ask for the free one-invoice fit check first.
+              The $299 Evidence Check uses the same deterministic billing checks
+              on one supported invoice. Upgrade within 14 days and the $299 is
+              credited automatically toward the Full 90-Day Audit.
             </p>
             <div className="hero-actions">
-              <Link className="button primary" href="/start">
-                Start the {audit.priceLabel} audit →
+              <Link className="button primary" href="/start?offer=evidence_check">
+                Start the {evidenceCheck.priceLabel} Evidence Check →
               </Link>
-              <TrackedAnchor
-                className="button"
-                href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
-                eventName="fit_check_click"
-                path="/3pl-invoice-audit"
-              >
-                Ask for a free fit check
-              </TrackedAnchor>
+              <Link className="button" href="/start?offer=audit_90_day">
+                Go straight to the Full Audit
+              </Link>
             </div>
           </div>
         </section>

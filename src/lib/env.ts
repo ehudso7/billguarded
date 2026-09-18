@@ -7,6 +7,7 @@ const optionalStripePrice = z.preprocess(
 
 const stripeServerSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
+  STRIPE_PRICE_EVIDENCE_CHECK: optionalStripePrice,
   STRIPE_PRICE_AUDIT_90_DAY: optionalStripePrice,
   STRIPE_PRICE_CONTINUOUS_MONITOR: optionalStripePrice,
 });
@@ -37,6 +38,7 @@ export function stripeServerEnv() {
   if (!cachedStripe) {
     cachedStripe = stripeServerSchema.parse({
       STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+      STRIPE_PRICE_EVIDENCE_CHECK: process.env.STRIPE_PRICE_EVIDENCE_CHECK,
       STRIPE_PRICE_AUDIT_90_DAY: process.env.STRIPE_PRICE_AUDIT_90_DAY,
       STRIPE_PRICE_CONTINUOUS_MONITOR:
         process.env.STRIPE_PRICE_CONTINUOUS_MONITOR,

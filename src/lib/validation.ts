@@ -36,7 +36,7 @@ export const confirmUploadSchema = uploadRequestSchema.omit({
 export const checkoutSchema = z.object({
   requestId: z.string().uuid(),
   accessToken: accessTokenSchema,
-  offer: z.enum(["audit_90_day", "continuous_monitor"]),
+  offer: z.enum(["evidence_check", "audit_90_day", "continuous_monitor"]),
 });
 
 export const allowedDocumentTypes = new Set([
