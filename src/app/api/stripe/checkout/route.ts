@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { preflightAuditDocuments } from "@/lib/audit-preflight";
 import { recordAuditFunnelEvent } from "@/lib/funnel-analytics";
-import { OFFERS } from "@/lib/offers";
+import { OFFERS, type OfferId } from "@/lib/offers";
 import { applicationOrigin } from "@/lib/origin";
 import { intakeAccessTokenHash } from "@/lib/security/intake-access";
 import { stripePriceId } from "@/lib/stripe-prices";
@@ -10,6 +10,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkoutSchema } from "@/lib/validation";
 
 const INTEGRATION_IDENTIFIER = "reqovr_rkqjvmtp";
+const EVIDENCE_CREDIT_COUPON_ID = "billguarded_evidence_credit_299";
+const EVIDENCE_CREDIT_WINDOW_DAYS = 14;
 
 async function recordCheckoutEvent(
   auditRequestId: string,
@@ -57,18 +59,22 @@ function isCsvDocument(document: {
   );
 }
 
-function checkoutIdempotencyKey(auditId: string) {
-  return `billguarded:audit:${auditId}:v1`;
+function checkoutIdempotencyKey(auditId: string, offerId: OfferId) {
+  return `billguarded:audit:${auditId}:${offerId}:v2`;
 }
 
 async function recoverExistingCheckout(input: {
   auditId: string;
+  offerId: OfferId;
   sessionId: string;
   requestUrl: string;
 }): Promise<CheckoutRecovery> {
   try {
     const session = await stripe().checkout.sessions.retrieve(input.sessionId);
-    if (session.metadata?.request_id !== input.auditId) {
+    if (
+      session.metadata?.request_id !== input.auditId ||
+      session.metadata?.offer !== input.offerId
+    ) {
       console.error("checkout_session_recovery_metadata_mismatch", input.auditId);
       return { kind: "unavailable" };
     }
@@ -98,6 +104,50 @@ async function recoverExistingCheckout(input: {
   return { kind: "unavailable" };
 }
 
+async function eligibleEvidenceCreditCustomer(email: string) {
+  const supabase = supabaseAdmin();
+  const { data: customers, error: customerError } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id,updated_at")
+    .ilike("email", email)
+    .order("updated_at", { ascending: false })
+    .limit(10);
+
+  if (customerError || !customers?.length) return null;
+
+  const customerIds = customers.map((customer) => customer.stripe_customer_id);
+  const { data: entitlements, error: entitlementError } = await supabase
+    .from("billing_entitlements")
+    .select("stripe_customer_id,offer,status,created_at")
+    .in("stripe_customer_id", customerIds);
+
+  if (entitlementError || !entitlements) return null;
+
+  const cutoff =
+    Date.now() - EVIDENCE_CREDIT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  for (const customer of customers) {
+    const rows = entitlements.filter(
+      (row) => row.stripe_customer_id === customer.stripe_customer_id,
+    );
+    const evidence = rows.find(
+      (row) =>
+        row.offer === "evidence_check" &&
+        row.status === "active" &&
+        new Date(row.created_at).getTime() >= cutoff,
+    );
+    const fullAudit = rows.find(
+      (row) => row.offer === "audit_90_day" && row.status === "active",
+    );
+
+    if (evidence && !fullAudit) {
+      return customer.stripe_customer_id;
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(
     await request.json().catch(() => null),
@@ -120,7 +170,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const offer = OFFERS.audit_90_day;
+  const offer = OFFERS[parsed.data.offer];
   const supabase = supabaseAdmin();
 
   const { data: audit, error: auditError } = await supabase
@@ -140,6 +190,7 @@ export async function POST(request: Request) {
   if (audit.status === "checkout_started" && audit.stripe_checkout_session_id) {
     const recovery = await recoverExistingCheckout({
       auditId: audit.id,
+      offerId: offer.id,
       sessionId: audit.stripe_checkout_session_id,
       requestUrl: request.url,
     });
@@ -247,6 +298,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const invoiceDocuments = csvDocuments.filter(
+    (document) => document.kind === "invoice",
+  );
+  if (offer.id === "evidence_check" && invoiceDocuments.length !== 1) {
+    await recordCheckoutEvent(
+      audit.id,
+      "unsupported_file_rejected",
+      "evidence_check_invoice_count",
+    );
+    return NextResponse.json(
+      {
+        error:
+          "The $299 Evidence Check accepts exactly one invoice CSV. No charge was created.",
+      },
+      { status: 409 },
+    );
+  }
+
   const preflight = await preflightAuditDocuments(csvDocuments);
   if (!preflight.ok) {
     await recordCheckoutEvent(
@@ -262,26 +331,38 @@ export async function POST(request: Request) {
 
   const priceId = stripePriceId(offer.id);
   const origin = applicationOrigin(request.url);
+  const creditCustomerId =
+    offer.id === "audit_90_day"
+      ? await eligibleEvidenceCreditCustomer(audit.email)
+      : null;
+  const creditAmountCents = creditCustomerId
+    ? OFFERS.evidence_check.priceCents
+    : 0;
   const metadata = {
     request_id: audit.id,
     offer: offer.id,
     company: audit.company.slice(0, 120),
+    credit_amount_cents: String(creditAmountCents),
   };
 
   let session;
   try {
     session = await stripe().checkout.sessions.create(
       {
-        customer_email: audit.email,
+        ...(creditCustomerId
+          ? { customer: creditCustomerId }
+          : { customer_email: audit.email, customer_creation: "always" as const }),
         line_items: [{ price: priceId, quantity: 1 }],
+        ...(creditCustomerId
+          ? { discounts: [{ coupon: EVIDENCE_CREDIT_COUPON_ID }] }
+          : {}),
         success_url: `${origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/start?cancelled=1`,
+        cancel_url: `${origin}/start?offer=${offer.id}&cancelled=1`,
         metadata,
         integration_identifier: INTEGRATION_IDENTIFIER,
         mode: "payment",
-        customer_creation: "always",
       },
-      { idempotencyKey: checkoutIdempotencyKey(audit.id) },
+      { idempotencyKey: checkoutIdempotencyKey(audit.id, offer.id) },
     );
   } catch (error) {
     console.error(
