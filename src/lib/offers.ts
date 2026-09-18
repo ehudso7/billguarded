@@ -1,26 +1,52 @@
-export type OfferId = "audit_90_day" | "continuous_monitor";
+export type OfferId =
+  | "evidence_check"
+  | "audit_90_day"
+  | "continuous_monitor";
 
 export type Offer = {
   id: OfferId;
   name: string;
   eyebrow: string;
   priceLabel: string;
+  priceCents: number;
   cadence: string;
   description: string;
   features: string[];
   mode: "payment" | "subscription";
   priceEnv:
+    | "STRIPE_PRICE_EVIDENCE_CHECK"
     | "STRIPE_PRICE_AUDIT_90_DAY"
     | "STRIPE_PRICE_CONTINUOUS_MONITOR";
   sandboxPriceId: string;
 };
 
 export const OFFERS: Record<OfferId, Offer> = {
+  evidence_check: {
+    id: "evidence_check",
+    name: "Evidence Check",
+    eyebrow: "Start with one invoice",
+    priceLabel: "$299",
+    priceCents: 29_900,
+    cadence: "one time",
+    description:
+      "Check one supported USD CSV 3PL invoice against one supplied USD CSV rate card and receive evidence-linked findings from the same deterministic audit engine.",
+    features: [
+      "One rate card plus one recent invoice",
+      "Duplicate and unsupported charge checks",
+      "Line arithmetic and unit-rate checks",
+      "Evidence-linked findings report",
+      "$299 credited toward a Full 90-Day Audit purchased within 14 days",
+    ],
+    mode: "payment",
+    priceEnv: "STRIPE_PRICE_EVIDENCE_CHECK",
+    sandboxPriceId: "price_evidence_check_test_required",
+  },
   audit_90_day: {
     id: "audit_90_day",
     name: "Full 90-Day Audit",
     eyebrow: "Recover the past",
     priceLabel: "$1,500",
+    priceCents: 150_000,
     cadence: "one time",
     description:
       "Reconcile up to 90 days of supported 3PL invoice CSVs against your supplied rate card, then review evidence-linked potential discrepancies.",
@@ -40,6 +66,7 @@ export const OFFERS: Record<OfferId, Offer> = {
     name: "Continuous Monitor",
     eyebrow: "Stop the next leak",
     priceLabel: "$599",
+    priceCents: 59_900,
     cadence: "per month",
     description:
       "Planned recurring reconciliation of new fulfillment invoices against supplied commercial terms. Paid enrollment remains disabled until recurring ingestion is production-ready.",
@@ -57,16 +84,20 @@ export const OFFERS: Record<OfferId, Offer> = {
 };
 
 export function isOfferId(value: unknown): value is OfferId {
-  return value === "audit_90_day" || value === "continuous_monitor";
+  return (
+    value === "evidence_check" ||
+    value === "audit_90_day" ||
+    value === "continuous_monitor"
+  );
 }
 
 export function offerFromPriceId(
   priceId: string | null | undefined,
-  auditPriceId: string,
-  monitorPriceId: string,
+  priceIds: Record<OfferId, string>,
 ): OfferId | null {
   if (!priceId) return null;
-  if (priceId === auditPriceId) return "audit_90_day";
-  if (priceId === monitorPriceId) return "continuous_monitor";
+  for (const offerId of Object.keys(priceIds) as OfferId[]) {
+    if (priceIds[offerId] === priceId) return offerId;
+  }
   return null;
 }
