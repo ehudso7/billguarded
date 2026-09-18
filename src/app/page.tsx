@@ -3,6 +3,7 @@ import { FunnelPageView, TrackedAnchor } from "@/app/funnel-tracker";
 import { OFFERS } from "@/lib/offers";
 
 export default function HomePage() {
+  const evidenceCheck = OFFERS.evidence_check;
   const audit = OFFERS.audit_90_day;
 
   return (
@@ -29,24 +30,28 @@ export default function HomePage() {
             disputing anything.
           </p>
           <p className="offer-summary">
-            <strong>Full 90-Day Audit — $1,500 one time.</strong> Upload one
-            supported USD CSV rate card and up to 10 USD CSV invoices before
-            secure Checkout opens.
+            <strong>Start with the $299 Evidence Check.</strong> Compare one
+            supported USD CSV invoice against one USD CSV rate card. Upgrade
+            to the Full 90-Day Audit within 14 days and the $299 is credited
+            automatically.
           </p>
           <div className="hero-actions">
-            <Link className="button primary" href="/start">
-              Start a 90-day audit →
+            <Link className="button primary" href="/start?offer=evidence_check">
+              Start the $299 Evidence Check →
+            </Link>
+            <Link className="button" href="/start?offer=audit_90_day">
+              Run the full 90-day audit
             </Link>
             <Link className="button" href="/demo">
               See a synthetic audit demo
             </Link>
             <TrackedAnchor
               className="button"
-              href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              href="mailto:hello@billguarded.com?subject=BillGuarded%20audit%20question"
               eventName="fit_check_click"
               path="/"
             >
-              Ask for a free fit check
+              Ask a question
             </TrackedAnchor>
           </div>
         </section>
@@ -54,7 +59,7 @@ export default function HomePage() {
         <section className="proof-strip" aria-label="How BillGuarded works">
           <div className="proof-item">
             <strong>1. Upload</strong>
-            <span>One USD-denominated CSV rate card plus up to 10 USD CSV invoices.</span>
+            <span>One USD CSV rate card plus one invoice for the Evidence Check, or up to 10 invoices for the Full Audit.</span>
           </div>
           <div className="proof-item">
             <strong>2. Reconcile</strong>
@@ -84,6 +89,24 @@ export default function HomePage() {
           </div>
 
           <div className="pricing-grid">
+            <article className="card highlight">
+              <span className="eyebrow">{evidenceCheck.eyebrow}</span>
+              <h3>{evidenceCheck.name}</h3>
+              <div className="price">
+                <strong>{evidenceCheck.priceLabel}</strong>
+                <span>{evidenceCheck.cadence}</span>
+              </div>
+              <p>{evidenceCheck.description}</p>
+              <ul>
+                {evidenceCheck.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <Link className="button primary" href="/start?offer=evidence_check">
+                Start {evidenceCheck.name}
+              </Link>
+            </article>
+
             <article className="card">
               <span className="eyebrow">{audit.eyebrow}</span>
               <h3>{audit.name}</h3>
@@ -97,7 +120,7 @@ export default function HomePage() {
                   <li key={feature}>{feature}</li>
                 ))}
               </ul>
-              <Link className="button primary" href="/start">
+              <Link className="button" href="/start?offer=audit_90_day">
                 Start {audit.name}
               </Link>
             </article>
