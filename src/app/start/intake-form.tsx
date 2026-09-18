@@ -6,6 +6,7 @@ import {
   captureFunnelEvent,
   currentAttribution,
 } from "@/lib/funnel-client";
+import { OFFERS, type OfferId } from "@/lib/offers";
 
 type IntakeResponse = { requestId: string; accessToken: string };
 type SignedUploadResponse = {
@@ -44,9 +45,13 @@ function validateCsvFile(file: File) {
 export default function IntakeForm(props: {
   initialMessage?: string;
   checkoutCancelled?: boolean;
+  initialOffer: OfferId;
 }) {
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [invoiceFiles, setInvoiceFiles] = useState<File[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<OfferId>(
+    props.initialOffer === "audit_90_day" ? "audit_90_day" : "evidence_check",
+  );
   const [status, setStatus] = useState(props.initialMessage ?? "Ready.");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -141,6 +146,16 @@ export default function IntakeForm(props: {
       return;
     }
 
+    const maxInvoices = selectedOffer === "evidence_check" ? 1 : 10;
+    if (invoiceFiles.length > maxInvoices) {
+      showError(
+        selectedOffer === "evidence_check"
+          ? "The $299 Evidence Check accepts exactly one invoice CSV."
+          : "The Full 90-Day Audit accepts up to 10 invoice CSV files.",
+      );
+      return;
+    }
+
     const selectedFiles = [contractFile, ...invoiceFiles];
     try {
       selectedFiles.forEach(validateCsvFile);
@@ -210,7 +225,7 @@ export default function IntakeForm(props: {
           body: JSON.stringify({
             requestId: intake.requestId,
             accessToken: intake.accessToken,
-            offer: "audit_90_day",
+            offer: selectedOffer,
           }),
         }),
       );
@@ -323,7 +338,11 @@ export default function IntakeForm(props: {
           </span>
         </div>
         <div className="field full">
-          <label htmlFor="invoices">Recent invoices — CSV, up to 10 files</label>
+          <label htmlFor="invoices">
+            {selectedOffer === "evidence_check"
+              ? "Recent invoice — CSV, exactly 1 file"
+              : "Recent invoices — CSV, up to 10 files"}
+          </label>
           <div className="file-box">
             <input
               id="invoices"
@@ -334,8 +353,13 @@ export default function IntakeForm(props: {
               aria-describedby="invoice-help intake-status"
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
-                if (files.length > 10) {
-                  showError("An audit can include at most 10 invoice CSV files.");
+                const maxInvoices = selectedOffer === "evidence_check" ? 1 : 10;
+                if (files.length > maxInvoices) {
+                  showError(
+                    selectedOffer === "evidence_check"
+                      ? "The $299 Evidence Check accepts exactly one invoice CSV."
+                      : "A Full 90-Day Audit can include at most 10 invoice CSV files.",
+                  );
                   void captureFunnelEvent(
                     "unsupported_file_rejected",
                     "/start",
@@ -356,7 +380,7 @@ export default function IntakeForm(props: {
                     );
                   }
                 }
-                setInvoiceFiles(files.slice(0, 10));
+                setInvoiceFiles(files.slice(0, maxInvoices));
               }}
             />
           </div>
@@ -386,13 +410,48 @@ export default function IntakeForm(props: {
         </div>
       </div>
 
-      <div className="offer-option selected" aria-label="Selected audit plan">
-        <span>
-          <strong>Full 90-Day Audit</strong>
-          <span className="muted"> — $1,500 one time</span>
-        </span>
-        <span className="eyebrow">Production ready</span>
-      </div>
+      <fieldset className="offer-picker">
+        <legend className="eyebrow">Choose your audit scope</legend>
+        {(["evidence_check", "audit_90_day"] as const).map((offerId) => {
+          const offer = OFFERS[offerId];
+          const selected = selectedOffer === offerId;
+          return (
+            <label
+              className={`offer-option ${selected ? "selected" : ""}`}
+              key={offerId}
+            >
+              <input
+                type="radio"
+                name="selectedOffer"
+                value={offerId}
+                checked={selected}
+                onChange={() => {
+                  setSelectedOffer(offerId);
+                  if (offerId === "evidence_check") {
+                    setInvoiceFiles((current) => current.slice(0, 1));
+                  }
+                }}
+              />
+              <span>
+                <strong>{offer.name}</strong>
+                <span className="muted">
+                  {" "}· {offer.priceLabel} {offer.cadence}
+                </span>
+                <span className="field-help">{offer.description}</span>
+                {offerId === "evidence_check" ? (
+                  <span className="field-help">
+                    Upgrade within 14 days and the $299 Evidence Check price is
+                    credited automatically toward the Full 90-Day Audit.
+                  </span>
+                ) : null}
+              </span>
+              <span className="eyebrow">
+                {offerId === "evidence_check" ? "Fastest paid proof" : "Full scope"}
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
 
       <button className="button primary" type="submit" disabled={busy}>
         {busy ? "Preparing secure checkout…" : "Upload and continue to Stripe →"}
