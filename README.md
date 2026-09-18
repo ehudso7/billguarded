@@ -4,10 +4,12 @@ BillGuarded is a self-service 3PL invoice reconciliation product for ecommerce o
 
 ## Production offer
 
-- Full 90-Day Audit — **$1,500 one time**
+- Evidence Check — **$299 one time** for one supported CSV rate card plus exactly one supported CSV invoice
+- Full 90-Day Audit — **$1,500 one time** for one supported CSV rate card plus up to 10 supported CSV invoices
+- Eligible Evidence Check buyers receive the **$299 price as an automatic credit** toward a Full 90-Day Audit purchased within 14 days
 - Continuous Monitor — **controlled early access; paid subscriptions are disabled until recurring ingestion is production-ready**
 
-The current deterministic engine accepts one CSV contract/rate card plus up to 10 CSV invoices. Checkout fails closed before payment if the supported structured files are not present. The combined upload is capped at 50 MB, with a 20 MB per-file limit.
+The deterministic engine is shared by both paid audit scopes. Checkout fails closed before payment if the required structured files are not present. The combined upload is capped at 50 MB, with a 20 MB per-file limit.
 
 ## Current deterministic checks
 
@@ -70,7 +72,8 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 - Webhook event IDs are stored for idempotency.
 - Production Checkout and post-payment redirects are pinned to `https://billguarded.com`.
 - Continuous Monitor Checkout is rejected until the recurring product is production-ready.
-- Only the Full 90-Day Audit product and its canonical $1,500 Price remain active in the live Stripe catalog.
+- The live Stripe catalog contains the $299 Evidence Check and the $1,500 Full 90-Day Audit.
+- The $299 upgrade credit is restricted to the Full 90-Day Audit and is applied only when the same Stripe customer has an eligible Evidence Check entitlement from the prior 14 days.
 
 ### Customer report access and recovery
 
@@ -78,7 +81,7 @@ Some legacy infrastructure identifiers still contain `reqovr` because BillGuarde
 - The completed audit page and downloadable findings CSV require that cookie and verify the audit belongs to the same Stripe customer.
 - Customers who change devices or lose the cookie can use a private `https://billguarded.com/recover#session_id=...` bearer link generated from their exact paid Stripe Checkout Session.
 - The browser fragment is not sent in the HTTP request. The recovery client immediately removes the fragment from the visible address and POSTs the credential to `/api/recover` in the request body.
-- The recovery API re-verifies the Checkout with Stripe, requires a completed paid 90-Day Audit, and matches the request ID, Checkout Session ID, and Stripe customer ID before issuing a fresh access cookie.
+- The recovery API re-verifies the Checkout with Stripe, requires a completed paid audit, and matches the request ID, Checkout Session ID, and Stripe customer ID before issuing a fresh access cookie.
 - Recovery responses are `no-store`, use a `no-referrer` policy, and the recovery page is noindex/nofollow and excluded by robots. Recovery credentials must never be put in query strings, published, forwarded, or captured by analytics.
 - Customer-delivery state is tracked separately from audit completion so a failed notification can be retried without reprocessing or recharging the audit.
 
