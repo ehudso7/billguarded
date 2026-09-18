@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BillGuardedReceptionist } from "@/components/billguarded-receptionist";
 import "./globals.css";
 import "./hardening.css";
 
@@ -44,7 +45,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geist.variable} ${mono.variable}`}>{children}</body>
+      <body className={`${geist.variable} ${mono.variable}`}>
+        {children}
+        <BillGuardedReceptionist />
+      </body>
     </html>
   );
 }
