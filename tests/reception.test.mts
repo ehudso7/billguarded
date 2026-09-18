@@ -19,3 +19,10 @@ test("keeps consequential work and sensitive data outside chat", () => {
   assert.match(policy, /claim that an upload, audit, payment/);
   assert.match(fallbackReceptionAnswer("Guarantee you will recover this fee"), /does not establish/);
 });
+
+test("answers every part of a mixed pricing, file, and action question", () => {
+  const answer = fallbackReceptionAnswer("What files do I need, what does it cost, and can chat dispute a charge?");
+  assert.match(answer, /Pricing:/);
+  assert.match(answer, /Files and start:/);
+  assert.match(answer, /Action boundary:/);
+});
