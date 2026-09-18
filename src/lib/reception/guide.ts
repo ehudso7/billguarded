@@ -18,6 +18,18 @@ Answer product, fit, pricing, onboarding, demo, privacy, security, troubleshooti
 
 export function fallbackReceptionAnswer(question: string): string {
   const q = question.toLowerCase();
+  const combined: string[] = [];
+  if (/price|pricing|cost|credit|299|1,?500/.test(q)) {
+    combined.push("Pricing: the Evidence Check is $299 one time for one supported invoice and one rate card. The Full 90-Day Audit is $1,500 one time for up to 10 invoice CSVs and 90 days of supported data. An eligible $299 Evidence Check is credited automatically if the same customer upgrades within 14 days.");
+  }
+  if (/start|onboard|upload|file|csv|format|fit/.test(q)) {
+    combined.push("Files and start: use /start with a USD CSV rate card and the supported invoice CSVs. Files must be at most 20 MB each and 50 MB combined. The Evidence Check requires exactly one invoice. Validation happens before checkout, and invoice rows should never be pasted into chat.");
+  }
+  if (/dispute|recover|refund from|guarantee|legal|accounting|accus/.test(q)) {
+    combined.push("Action boundary: chat cannot contact a 3PL, file a dispute, accuse a provider, or guarantee a refund or recovery. BillGuarded produces evidence-linked potential discrepancies for your team to review and is not legal or accounting advice.");
+  }
+  if (combined.length > 1) return combined.join("\n\n");
+
   if (/price|pricing|cost|credit|299|1,?500/.test(q)) {
     return "The Evidence Check is $299 one time for one supported invoice and one rate card. The Full 90-Day Audit is $1,500 one time for up to 10 invoice CSVs and 90 days of supported data. An eligible $299 Evidence Check is credited automatically if the same customer upgrades within 14 days. There is no percentage-of-recovery fee and no recovery guarantee.";
   }
