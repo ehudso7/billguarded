@@ -22,7 +22,7 @@ export default function TermsPage() {
       <article className="legal-card">
         <span className="eyebrow">Terms</span>
         <h1>BillGuarded Terms of Service</h1>
-        <p>Last updated: August 27, 2026.</p>
+        <p>Last updated: September 17, 2026.</p>
 
         <h2>The service</h2>
         <p>
@@ -63,10 +63,16 @@ export default function TermsPage() {
 
         <h2>Payments</h2>
         <p>
-          One-time audit fees are shown before Stripe Checkout. Paid recurring
-          monitoring is not offered until the recurring workflow is explicitly
-          made generally available. Billing is processed by Stripe and may be
-          subject to Stripe&apos;s applicable terms.
+          One-time audit fees are shown before Stripe Checkout. The $299
+          Evidence Check is a separate paid audit scope covering one supported
+          invoice and one supplied rate card. If the same customer purchases a
+          Full 90-Day Audit within 14 days of an eligible Evidence Check, the
+          $299 Evidence Check price may be credited toward that Full 90-Day
+          Audit at checkout. The credit is not cash, is not transferable, and
+          does not apply to Continuous Monitor. Paid recurring monitoring is
+          not offered until the recurring workflow is explicitly made generally
+          available. Billing is processed by Stripe and may be subject to
+          Stripe&apos;s applicable terms.
         </p>
 
         <h2>Availability and changes</h2>
