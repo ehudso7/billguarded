@@ -457,3 +457,15 @@ button {
     padding: 26px;
   }
 }
+
+
+/* Portfolio experience baseline */
+html, body { width: 100%; max-width: 100%; overflow-x: clip; }
+.shell, main, section, article, header, footer, nav, div, fieldset, label { min-width: 0; }
+img, svg, video, canvas { max-width: 100%; height: auto; }
+p, li, code, strong, span { overflow-wrap: anywhere; }
+button, [role='button'], input:not([type='hidden']):not([type='checkbox']):not([type='radio']), select, textarea { min-height: 40px; max-width: 100%; }
+@media (max-width: 480px) {
+  .offer-option { flex-wrap: wrap; gap: 10px; padding: 14px; }
+  .offer-option > * { min-width: 0; }
+}

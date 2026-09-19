@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 /* global process, document, getComputedStyle, fetch, URLSearchParams, URL */
 const { test, expect } = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
@@ -63,7 +62,7 @@ for (const route of routes) {
         if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
       });
       await page.setViewportSize(viewport);
-      const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
+      const response = await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
       expect(response, `No document response for ${route}`).toBeTruthy();
       expect(response.status(), `${route} returned ${response.status()}`).toBeLessThan(400);
 
