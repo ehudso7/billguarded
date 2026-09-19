@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   AUDIT_COMPLETION_SUBJECT,
+  BILLGUARDED_LEGACY_SUPPORT_SENDER,
   BILLGUARDED_SUPPORT_EMAIL,
-  BILLGUARDED_SUPPORT_SENDER,
+  BILLGUARDED_TRANSACTIONAL_EMAIL,
+  BILLGUARDED_TRANSACTIONAL_SENDER,
 } from "@/lib/audit-delivery-email";
 import { resendServerEnv } from "@/lib/env";
 import { resend } from "@/lib/resend";
@@ -10,6 +12,15 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Preserve already-accepted delivery events from the legacy support sender through
+// the 2026-10-19 transition window. New mail uses only the transactional sender.
+const ACCEPTED_EVENT_SENDERS = new Set([
+  BILLGUARDED_TRANSACTIONAL_SENDER,
+  BILLGUARDED_TRANSACTIONAL_EMAIL,
+  BILLGUARDED_LEGACY_SUPPORT_SENDER,
+  BILLGUARDED_SUPPORT_EMAIL,
+]);
 
 const TRACKED_EVENTS = new Set([
   "email.sent",
@@ -58,10 +69,7 @@ export async function POST(request: Request) {
     return noStore({ received: true, ignored: true });
   }
 
-  if (
-    event.data.from !== BILLGUARDED_SUPPORT_SENDER &&
-    event.data.from !== BILLGUARDED_SUPPORT_EMAIL
-  ) {
+  if (!ACCEPTED_EVENT_SENDERS.has(event.data.from)) {
     return noStore({ received: true, ignored: true });
   }
 

@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   AUDIT_COMPLETION_SUBJECT,
   BILLGUARDED_EMAIL_DOMAIN,
+  BILLGUARDED_LEGACY_SUPPORT_SENDER,
   BILLGUARDED_PROMOTIONAL_EMAIL,
   BILLGUARDED_SUPPORT_EMAIL,
-  BILLGUARDED_SUPPORT_SENDER,
+  BILLGUARDED_TRANSACTIONAL_EMAIL,
+  BILLGUARDED_TRANSACTIONAL_SENDER,
   auditRecoveryUrl,
   buildAuditCompletionEmail,
 } from "../src/lib/audit-delivery-email.ts";
@@ -41,16 +43,21 @@ test("test Checkout sessions cannot become live customer delivery links", () => 
 
 test("BillGuarded sender identities are pinned to the product domain", () => {
   assert.equal(BILLGUARDED_EMAIL_DOMAIN, "billguarded.com");
-  assert.equal(BILLGUARDED_PROMOTIONAL_EMAIL, "hello@billguarded.com");
+  assert.equal(BILLGUARDED_PROMOTIONAL_EMAIL, "everton@billguarded.com");
   assert.equal(BILLGUARDED_SUPPORT_EMAIL, "support@billguarded.com");
   assert.equal(
-    BILLGUARDED_SUPPORT_SENDER,
+    BILLGUARDED_TRANSACTIONAL_SENDER,
+    "BillGuarded <notifications@billguarded.com>",
+  );
+  assert.equal(
+    BILLGUARDED_LEGACY_SUPPORT_SENDER,
     "BillGuarded <support@billguarded.com>",
   );
 
   for (const identity of [
     BILLGUARDED_PROMOTIONAL_EMAIL,
     BILLGUARDED_SUPPORT_EMAIL,
+    BILLGUARDED_TRANSACTIONAL_EMAIL,
   ]) {
     assert.equal(identity.split("@")[1], BILLGUARDED_EMAIL_DOMAIN);
   }
@@ -62,7 +69,7 @@ test("completion email uses only the approved transactional sender and support r
     checkoutSessionId: LIVE_SESSION,
   });
 
-  assert.equal(email.from, BILLGUARDED_SUPPORT_SENDER);
+  assert.equal(email.from, BILLGUARDED_TRANSACTIONAL_SENDER);
   assert.equal(email.replyTo, BILLGUARDED_SUPPORT_EMAIL);
   assert.equal(email.subject, AUDIT_COMPLETION_SUBJECT);
   assert.deepEqual(email.to, ["buyer@example.com"]);
@@ -243,6 +250,22 @@ test("stale post-send delivery is quarantined and cannot auto-retry", () => {
     migration,
     /when d\.status = 'sending' then 'retryable'/,
   );
+});
+
+test("Resend lifecycle persistence accepts the canonical sender and bounded legacy events", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20260919150000_standardize_billguarded_resend_senders.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /notifications@billguarded\.com/);
+  assert.match(migration, /billguarded <notifications@billguarded\.com>/);
+  assert.match(migration, /support@billguarded\.com/);
+  assert.match(migration, /billguarded <support@billguarded\.com>/);
+  assert.match(migration, /transition ending 2026-10-19/);
 });
 
 test("Resend lifecycle persistence is service-role-only and idempotent", () => {
