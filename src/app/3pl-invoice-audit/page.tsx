@@ -138,7 +138,7 @@ export default function ThreePlInvoiceAuditPage() {
             </Link>
             <TrackedAnchor
               className="button"
-              href="mailto:hello@billguarded.com?subject=BillGuarded%20audit%20question"
+              href="mailto:everton@billguarded.com?subject=BillGuarded%20audit%20question"
               eventName="fit_check_click"
               path="/3pl-invoice-audit"
             >
