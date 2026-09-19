@@ -34,7 +34,7 @@ Production verification on 2026-08-31 returned HTTP 200. The page uses synthetic
 
 ## Recommended reply
 
-Send a short reply from `hello@billguarded.com` directly to Brian. Lead with the existing live demo; do not promise a custom Loom before it is necessary. Offer the no-cost anonymized one-invoice + matching-rate-card fit check as the next proof step.
+Send a short reply from `everton@billguarded.com` directly to Brian. Lead with the existing live demo; do not promise a custom Loom before it is necessary. Offer the no-cost anonymized one-invoice + matching-rate-card fit check as the next proof step.
 
 Proposed copy:
 
