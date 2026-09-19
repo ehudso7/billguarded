@@ -47,7 +47,7 @@ export default function HomePage() {
             </Link>
             <TrackedAnchor
               className="button"
-              href="mailto:hello@billguarded.com?subject=BillGuarded%20audit%20question"
+              href="mailto:everton@billguarded.com?subject=BillGuarded%20audit%20question"
               eventName="fit_check_click"
               path="/"
             >
@@ -144,7 +144,7 @@ export default function HomePage() {
               </ul>
               <a
                 className="button"
-                href="mailto:hello@billguarded.com?subject=Continuous%20Monitor%20early%20access"
+                href="mailto:everton@billguarded.com?subject=Continuous%20Monitor%20early%20access"
               >
                 Request early access
               </a>
