@@ -278,7 +278,7 @@ export default function DemoPage() {
           <div className={styles.ctaActions}>
             <TrackedAnchor
               className="button primary"
-              href="mailto:hello@billguarded.com?subject=Free%20one-invoice%20fit%20check"
+              href="mailto:everton@billguarded.com?subject=Free%20one-invoice%20fit%20check"
               eventName="fit_check_click"
               path="/demo"
             >
