@@ -121,6 +121,7 @@ export async function captureFunnelEvent(
   eventName: FunnelEventName,
   path: PublicAnalyticsPath,
 ) {
+  if (!/^(?:www\.)?billguarded\.com$/i.test(window.location.hostname)) return;
   const attribution = currentAttribution();
   const payload = {
     eventName,

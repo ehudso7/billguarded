@@ -1,0 +1,76 @@
+name: Portfolio experience contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portfolio-experience:
+    name: portfolio-experience
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      INSTALL_COMMAND: npm ci --ignore-scripts
+      BUILD_COMMAND: npm run build
+      START_COMMAND: npm start
+      APP_DIRECTORY: .
+      PORT: 3000
+      PORTFOLIO_ROUTES: auto
+      PORTFOLIO_OAUTH_PROVIDERS: ''
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXTAUTH_SECRET: dummy-portfolio-contract-ci-secret
+      GOOGLE_CLIENT_ID: portfolio-google-client.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: portfolio-google-secret
+      GITHUB_CLIENT_ID: portfolio-github-client
+      GITHUB_CLIENT_SECRET: portfolio-github-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: '1'
+      STRIPE_SECRET_KEY: sk_test_placeholder_for_build_only
+      STRIPE_PRICE_AUDIT_90_DAY: price_placeholder_audit
+      STRIPE_PRICE_CONTINUOUS_MONITOR: price_placeholder_monitor
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+      SUPABASE_SECRET_KEY: sb_secret_placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install caller dependencies
+        run: cd "$APP_DIRECTORY" && bash -lc "$INSTALL_COMMAND"
+      - name: Build caller application
+        run: cd "$APP_DIRECTORY" && bash -lc "$BUILD_COMMAND"
+      - name: Install isolated browser verifier
+        run: |
+          rm -rf .portfolio-contract
+          mkdir -p .portfolio-contract
+          cp "${GITHUB_WORKSPACE}/.github/portfolio/experience-contract.spec.cjs" .portfolio-contract/experience-contract.spec.cjs
+          npm install --prefix .portfolio-contract --no-save --ignore-scripts @playwright/test@1.58.2 @axe-core/playwright@4.11.0 wait-on@9.0.1 serve@14.2.5
+      - name: Install Chromium
+        run: .portfolio-contract/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start caller application
+        run: |
+          (cd "$APP_DIRECTORY" && bash -lc "$START_COMMAND") > /tmp/portfolio-app.log 2>&1 &
+          echo $! > /tmp/portfolio-app.pid
+          .portfolio-contract/node_modules/.bin/wait-on --timeout 120000 "http://127.0.0.1:${PORT}"
+      - name: Prepare cross-product browser contract
+        run: test -f .portfolio-contract/experience-contract.spec.cjs
+      - name: Verify routes, responsive fit, visuals, and OAuth state
+        run: |
+          printf '%s\n' "module.exports = { testDir: '.', workers: 1, retries: 0, timeout: 60000 };" > .portfolio-contract/playwright.config.cjs
+          .portfolio-contract/node_modules/.bin/playwright test --config=.portfolio-contract/playwright.config.cjs --browser=chromium --reporter=line
+      - name: Upload app log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-experience-app-log
+          path: /tmp/portfolio-app.log
+          retention-days: 7

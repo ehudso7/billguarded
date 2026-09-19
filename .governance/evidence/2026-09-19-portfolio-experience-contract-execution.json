@@ -1,0 +1,55 @@
+{
+  "record_id": "run-2026-09-19-billguarded-portfolio-experience",
+  "project_id": "billguarded",
+  "task_id": "portfolio-experience-contract",
+  "graph_id": "architecture-review",
+  "graph_version": "1.0.0",
+  "governance_version": "2.4.0",
+  "started_at": "2026-09-19T04:30:00Z",
+  "actor": "ehudso7",
+  "agent": "codex",
+  "model": "GPT-5.6 Sol",
+  "status": "running",
+  "node_executions": [
+    {
+      "node_id": "intake",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "User authorized mandatory portfolio-wide browser contract implementation."
+    },
+    {
+      "node_id": "inspect",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Inspected repository instructions when present, workflow graph, package scripts, and CI."
+    },
+    {
+      "node_id": "design",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Selected automatic static-route browser verification with isolated verifier dependencies and repository-matched runtime commands."
+    },
+    {
+      "node_id": "implement",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Added workflow and browser contract; CI verification is pending."
+    }
+  ],
+  "approvals": [
+    {
+      "node_id": "intake",
+      "approved": true,
+      "approver": "ehudso7",
+      "approved_at": "2026-09-19T00:00:00Z",
+      "policy_ref": "AGENTS.md or user authorization",
+      "notes": "Draft PR verification only; merge and production deployment remain unapproved."
+    }
+  ],
+  "files_changed": [
+    ".github/workflows/portfolio-experience.yml",
+    ".github/portfolio/experience-contract.spec.cjs",
+    ".governance/evidence/2026-09-19-portfolio-experience-contract-execution.json"
+  ],
+  "commands_executed": []
+}
