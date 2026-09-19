@@ -121,7 +121,7 @@ export default function DemoPage() {
               Only the supplied commercial terms are treated as the comparison baseline.
             </p>
           </div>
-          <div className={styles.tableWrap}>
+          <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Scrollable audit data table">
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -155,7 +155,7 @@ export default function DemoPage() {
               Rows with a detected exception are highlighted. Clean lines remain clean.
             </p>
           </div>
-          <div className={styles.tableWrap}>
+          <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Scrollable audit data table">
             <table className={styles.table}>
               <thead>
                 <tr>

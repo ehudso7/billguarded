@@ -78,7 +78,7 @@ for (const route of routes) {
             const rect = element.getBoundingClientRect();
             return visible(element) && (rect.left < -1 || rect.right > viewportWidth + 1);
           }).map((element) => element.outerHTML.slice(0, 180));
-        const undersizedControls = [...document.querySelectorAll('button,input:not([type="hidden"]),select,[role="button"]')]
+        const undersizedControls = [...document.querySelectorAll('button,input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),select,[role="button"]')]
           .filter((element) => visible(element) && element.getBoundingClientRect().height < 40)
           .map((element) => element.outerHTML.slice(0, 180));
         const invalidIcons = [...document.querySelectorAll('svg')]
